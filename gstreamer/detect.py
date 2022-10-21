@@ -31,6 +31,7 @@ python3 detect.py \
   --labels ${TEST_DATA}/coco_labels.txt
 """
 import argparse
+import colorsys
 import gstreamer
 import os
 import time
@@ -42,7 +43,25 @@ from pycoral.utils.dataset import read_label_file
 from pycoral.utils.edgetpu import make_interpreter
 from pycoral.utils.edgetpu import run_inference
 
-def generate_svg(src_size, inference_box, objs, labels, text_lines):
+
+def rgb(color):
+    return 'rgb(%s, %s, %s)' % color
+
+def color(i, total):
+    return tuple(int(255.0 * c) for c in colorsys.hsv_to_rgb(i / total, 1.0, 1.0))
+
+def make_palette(keys):
+    return {key : rgb(color(i, len(keys))) for i, key in enumerate(keys)}
+
+def make_label_colors(labels):
+    if labels:
+        palette = make_palette(labels.keys())
+        return lambda obj_id: palette[obj_id]
+
+    return lambda obj_id: 'white'
+
+
+def generate_svg(src_size, inference_box, objs, labels, label_colors, text_lines):
     svg = SVG(src_size)
     src_w, src_h = src_size
     box_x, box_y, box_w, box_h = inference_box
@@ -64,7 +83,7 @@ def generate_svg(src_size, inference_box, objs, labels, text_lines):
         percent = int(100 * obj.score)
         label = '{}% {}'.format(percent, labels.get(obj.id, obj.id))
         svg.add_text(x, y - 5, label, 20)
-        svg.add_rect(x, y, w, h, 'red', 2)
+        svg.add_rect(x, y, w, h, label_colors(obj.id), 4, obj.score)
     return svg.finish()
 
 def main():
@@ -93,6 +112,8 @@ def main():
     labels = read_label_file(args.labels)
     inference_size = input_size(interpreter)
 
+    label_colors = make_label_colors(labels)
+
     # Average fps over last 30 frames.
     fps_counter = avg_fps_counter(30)
 
@@ -108,7 +129,7 @@ def main():
           'FPS: {} fps'.format(round(next(fps_counter))),
       ]
       print(' '.join(text_lines))
-      return generate_svg(src_size, inference_box, objs, labels, text_lines)
+      return generate_svg(src_size, inference_box, objs, labels, label_colors, text_lines)
 
     result = gstreamer.run_pipeline(user_callback,
                                     src_size=(640, 480),

@@ -207,7 +207,8 @@ def run_pipeline(user_function,
                  appsink_size,
                  videosrc='/dev/video1',
                  videofmt='raw',
-                 headless=False):
+                 headless=False,
+                 crop=False):
     if videofmt == 'h264':
         SRC_CAPS = 'video/x-h264,width={width},height={height},framerate=30/1'
     elif videofmt == 'jpeg':
@@ -246,10 +247,19 @@ def run_pipeline(user_function,
             """
             scale_caps = 'video/x-raw,format=BGRA,width={w},height={h}'.format(w=src_size[0], h=src_size[1])
         else:
-            PIPELINE += """ ! decodebin ! glupload ! tee name=t
-                t. ! queue ! glfilterbin filter=glbox name=glbox ! {sink_caps} ! {sink_element}
-                t. ! queue ! glsvgoverlaysink name=overlaysink
-            """
+            PIPELINE += """ ! decodebin ! glupload ! tee name=t"""
+            if crop:
+                PIPELINE += """
+                  t. ! queue ! glfilterbin filter=glcropbox name=glbox ! {sink_caps} ! {sink_element}
+                  t. ! queue ! glfilterbin filter=glcropbox name=glbox1 ! glsvgoverlaysink name=overlaysink
+                """
+            else:
+                PIPELINE += """
+                  t. ! queue ! glfilterbin filter=glbox name=glbox ! {sink_caps} ! {sink_element}
+                  t. ! queue ! glsvgoverlaysink name=overlaysink
+                """
+            # ! videocrop top=300 left=400 right=400 bottom=300
+            # t. ! queue ! glfilterbin filter=glbox name=glbox ! {sink_caps} ! {sink_element}
             scale_caps = None
     else:
         scale = min(appsink_size[0] / src_size[0], appsink_size[1] / src_size[1])
