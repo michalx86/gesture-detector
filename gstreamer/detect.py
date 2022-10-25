@@ -37,6 +37,7 @@ import os
 import time
 
 from common import avg_fps_counter, SVG
+import motion_detector
 from pycoral.adapters.common import input_size
 from pycoral.adapters.detect import get_objects
 from pycoral.utils.dataset import read_label_file
@@ -129,6 +130,7 @@ def main():
           'FPS: {} fps'.format(round(next(fps_counter))),
       ]
       print(' '.join(text_lines))
+      motion_detector.get_motion_continuity(None, objs)
       return generate_svg(src_size, inference_box, objs, labels, label_colors, text_lines)
 
     result = gstreamer.run_pipeline(user_callback,
