@@ -37,7 +37,7 @@ import os
 import time
 
 from common import avg_fps_counter, SVG
-import motion_detector
+import object_tracker
 from pycoral.adapters.common import input_size
 from pycoral.adapters.detect import get_objects
 from pycoral.utils.dataset import read_label_file
@@ -117,20 +117,28 @@ def main():
 
     # Average fps over last 30 frames.
     fps_counter = avg_fps_counter(30)
+    tracked_obj = None
 
     def user_callback(input_tensor, src_size, inference_box):
       nonlocal fps_counter
+      nonlocal tracked_obj
       start_time = time.monotonic()
       run_inference(interpreter, input_tensor)
       # For larger input image sizes, use the edgetpu.classification.engine for better performance
       objs = get_objects(interpreter, args.threshold)[:args.top_k]
       end_time = time.monotonic()
+
+      filtered_objs = list(filter( lambda obj: obj.score > 0.5 and obj.id != 3 and obj.id != 4, objs))
+      tracked_obj = object_tracker.track(tracked_obj, filtered_objs)
+
       text_lines = [
           'Inference: {:.2f} ms'.format((end_time - start_time) * 1000),
           'FPS: {} fps'.format(round(next(fps_counter))),
+          'ID: {}'.format(tracked_obj.id if tracked_obj is not None else '--'),
+          'Score: {}'.format(tracked_obj.score if tracked_obj is not None else '--'),
       ]
       print(' '.join(text_lines))
-      motion_detector.get_motion_continuity(None, objs)
+
       return generate_svg(src_size, inference_box, objs, labels, label_colors, text_lines)
 
     result = gstreamer.run_pipeline(user_callback,
