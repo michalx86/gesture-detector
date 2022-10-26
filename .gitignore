@@ -1,4 +1,6 @@
 all_models/
 **__pycache__
 AccessToken.txt
+*.swp
+*.pyc
 

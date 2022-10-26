@@ -29,12 +29,10 @@ class TestMotionDetector(unittest.TestCase):
 
   def test_get_motion_continuity_oldobj_no_detection(self):
     obj = Object(id=1, score=0.5, bbox=BBox(xmin=1, ymin=1, xmax=2, ymax=2))
-    exp_obj = Object(id=1, score=0.5, bbox=BBox(xmin=1, ymin=1, xmax=2, ymax=2))
 
     new_obj = motion_detector.get_motion_continuity(obj, None)
 
-    self.assertEqual(new_obj, exp_obj, "Should be equal to: {}".format(exp_obj))
-    self.assertEqual(obj.score, 0.5, "Input obj should not be modified.")
+    self.assertEqual(new_obj, None, "Should be None")
 
   def test_get_motion_continuity_oldobj_1_detection_nointersection(self):
     obj1 = Object(id=1, score=0.6, bbox=BBox(xmin=1, ymin=1, xmax=2, ymax=2))
