@@ -37,10 +37,29 @@ class TestMotionDetector(unittest.TestCase):
   def test_get_motion_continuity_oldobj_1_detection_nointersection(self):
     obj1 = Object(id=1, score=0.6, bbox=BBox(xmin=1, ymin=1, xmax=2, ymax=2))
     obj2 = Object(id=1, score=0.8, bbox=BBox(xmin=3, ymin=3, xmax=4, ymax=4))
+    exp_obj = Object(id=1, score=0.0, bbox=BBox(xmin=3, ymin=3, xmax=4, ymax=4))
 
     new_obj = motion_detector.get_motion_continuity(obj1, [obj2])
 
-    self.assertEqual(new_obj, None, "Should be None")
+    self.assertEqual(new_obj, exp_obj, "Got: {}\nShould be: {}".format(new_obj, exp_obj))
+
+  def test_get_motion_continuity_oldobj_1_detection_intersection_with_same_id(self):
+    obj1 = Object(id=1, score=0.0, bbox=BBox(xmin=1.0, ymin=1, xmax=3, ymax=3))
+    obj2 = Object(id=1, score=0.8, bbox=BBox(xmin=2.0, ymin=2, xmax=4, ymax=4))
+    exp_obj = Object(id=1, score=1.0, bbox=BBox(xmin=2, ymin=2, xmax=4, ymax=4))
+
+    new_obj = motion_detector.get_motion_continuity(obj1, [obj2])
+
+    self.assertEqual(new_obj, exp_obj, "Got: {}\nShould be: {}".format(new_obj, exp_obj))
+
+  def test_get_motion_continuity_oldobj_1_detection_intersection_with_different_id(self):
+    obj1 = Object(id=1, score=0.0, bbox=BBox(xmin=1.0, ymin=1, xmax=3, ymax=3))
+    obj2 = Object(id=0, score=0.8, bbox=BBox(xmin=2.0, ymin=2, xmax=4, ymax=4))
+    exp_obj = Object(id=0, score=0.0, bbox=BBox(xmin=2, ymin=2, xmax=4, ymax=4))
+
+    new_obj = motion_detector.get_motion_continuity(obj1, [obj2])
+
+    self.assertEqual(new_obj, exp_obj, "Got: {}\nShould be: {}".format(new_obj, exp_obj))
 
 if __name__ == '__main__':
     unittest.main()
