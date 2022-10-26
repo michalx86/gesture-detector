@@ -1,5 +1,5 @@
 
-import mocks
+import tests.gstreamer.mocks as mocks
 import gstreamer.motion_detector as motion_detector
 import unittest
 
