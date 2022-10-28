@@ -38,6 +38,7 @@ import time
 
 from common import avg_fps_counter, SVG
 import object_tracker
+import key_emitter
 from pycoral.adapters.common import input_size
 from pycoral.adapters.detect import get_objects
 from pycoral.utils.dataset import read_label_file
@@ -118,10 +119,12 @@ def main():
     # Average fps over last 30 frames.
     fps_counter = avg_fps_counter(30)
     tracked_obj = None
+    key_emtr = key_emitter.KeyEmitter()
 
     def user_callback(input_tensor, src_size, inference_box):
       nonlocal fps_counter
       nonlocal tracked_obj
+      nonlocal key_emtr
       start_time = time.monotonic()
       run_inference(interpreter, input_tensor)
       # For larger input image sizes, use the edgetpu.classification.engine for better performance
@@ -131,11 +134,15 @@ def main():
       filtered_objs = list(filter( lambda obj: obj.score > 0.5 and obj.id != 3 and obj.id != 4, objs))
       tracked_obj = object_tracker.track(tracked_obj, filtered_objs)
 
+      tracked_obj_id    = tracked_obj.id    if tracked_obj is not None else -1
+      tracked_obj_score = tracked_obj.score if tracked_obj is not None else 0
+      key_emtr.push_input(tracked_obj_id, end_time)
+
       text_lines = [
           'Inference: {:.2f} ms'.format((end_time - start_time) * 1000),
           'FPS: {} fps'.format(round(next(fps_counter))),
-          'ID: {}'.format(tracked_obj.id if tracked_obj is not None else '--'),
-          'Score: {}'.format(tracked_obj.score if tracked_obj is not None else '--'),
+          'ID: {}'.format(tracked_obj_id if tracked_obj_id != -1 else '--'),
+          'Score: {}'.format(tracked_obj_score),
       ]
       print(' '.join(text_lines))
 
