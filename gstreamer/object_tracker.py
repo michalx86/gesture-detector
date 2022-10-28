@@ -1,6 +1,4 @@
 from pycoral.adapters.detect import BBox
-#from tests.gstreamer.mocks import BBox
-
 
 def track(old_tracked_obj, objs):
     new_tracked_obj = None

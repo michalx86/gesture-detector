@@ -1,5 +1,5 @@
-from tests.gstreamer.mocks import Object
-from tests.gstreamer.mocks import BBox
+from pycoral.adapters.detect import Object
+from pycoral.adapters.detect import BBox
 import gstreamer.object_tracker as object_tracker
 import unittest
 
