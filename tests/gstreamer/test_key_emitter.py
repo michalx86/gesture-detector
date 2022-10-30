@@ -19,28 +19,33 @@ class TestKeyEmitter(unittest.TestCase):
     def setUp(self):
         self.emitter = KeyEmitter()
 
+    def enumerate_and_execute(self, sequence):
+        n = 0
+        for raw_code, time, expected in sequence:
+            received = self.emitter.push_input(raw_code, time)
+            yield n, received, expected
+            n += 1
+
     def test_push_input_press_key_too_short(self):
-        self.emitter.push_input(RawCode.NO_INPUT, TIMESTAMP_START)
+        key_sequence = [
+                (RawCode.NO_INPUT, TIMESTAMP_START,             (KeyCode.NO_KEY, KeyEvent.NO_EVENT)),
+                (RawCode.GEST_UP,  TIMESTAMP_KEY_DOWN,          (KeyCode.NO_KEY, KeyEvent.NO_EVENT)),
+                (RawCode.NO_INPUT, TIMESTAMP_KEY_RELEASE_NOKEY, (KeyCode.NO_KEY, KeyEvent.NO_EVENT)),
+                ]
 
-        key, event = self.emitter.push_input(RawCode.GEST_UP, TIMESTAMP_KEY_DOWN)
-        expected = (KeyCode.NO_KEY, KeyEvent.NO_EVENT)
-        self.assertEqual((key, event), expected, "Got: {},{}\nShould be: {}".format(key, event, expected))
-
-        key, event = self.emitter.push_input(RawCode.NO_INPUT, TIMESTAMP_KEY_RELEASE_NOKEY)
-        expected = (KeyCode.NO_KEY, KeyEvent.NO_EVENT)
-        self.assertEqual((key, event), expected, "Got: {},{}\nShould be: {}".format(key, event, expected))
+        for i, received, expected in self.enumerate_and_execute(key_sequence):
+            self.assertEqual(received, expected, "Failed at index: {}".format(i))
 
     def test_push_input_press_key(self):
-        self.emitter.push_input(RawCode.NO_INPUT, TIMESTAMP_START)
-        self.emitter.push_input(RawCode.GEST_DOWN, TIMESTAMP_KEY_DOWN)
+        key_sequence = [
+                (RawCode.NO_INPUT,  TIMESTAMP_START,       (KeyCode.NO_KEY, KeyEvent.NO_EVENT)),
+                (RawCode.GEST_DOWN, TIMESTAMP_KEY_DOWN,    (KeyCode.NO_KEY, KeyEvent.NO_EVENT)),
+                (RawCode.GEST_DOWN, TIMESTAMP_KEY_PRESS,   (KeyCode.DOWN, KeyEvent.PRESSED)),
+                (RawCode.NO_INPUT,  TIMESTAMP_KEY_RELEASE, (KeyCode.DOWN, KeyEvent.RELEASED)),
+                ]
 
-        key, event = self.emitter.push_input(RawCode.GEST_DOWN, TIMESTAMP_KEY_PRESS)
-        expected = (KeyCode.DOWN, KeyEvent.PRESSED)
-        self.assertEqual((key, event), expected, "Got: {},{}\nShould be: {}".format(key, event, expected))
-
-        key, event = self.emitter.push_input(RawCode.NO_INPUT, TIMESTAMP_KEY_RELEASE)
-        expected = (KeyCode.DOWN, KeyEvent.RELEASED)
-        self.assertEqual((key, event), expected, "Got: {},{}\nShould be: {}".format(key, event, expected))
+        for i, received, expected in self.enumerate_and_execute(key_sequence):
+            self.assertEqual(received, expected, "Failed at index: {}".format(i))
 
 
 if __name__ == '__main__':
