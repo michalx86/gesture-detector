@@ -2,7 +2,6 @@ from enum import Enum
 
 class KeyState(Enum):
     RELEASED = 0
-#    PRESSING = 1
     PRESSED = 2
     REPEATING = 3
 
@@ -49,29 +48,28 @@ class KeyEmitter:
 
         if self.raw_input != raw_input:
             self.input_time = time
-            if raw_input == RawCode.NO_INPUT and self.state in {KeyState.PRESSED, KeyState.REPEATING}:
+            if self.state != KeyState.RELEASED:
                 ret_key_code = self.rawinput_2_keycode(self.raw_input) 
                 ret_key_event = KeyEvent.RELEASED
+                self.state = KeyState.RELEASED
             self.raw_input = raw_input
 
-        if ret_key_event != KeyEvent.RELEASED:
+        if ret_key_event != KeyEvent.RELEASED and raw_input != RawCode.NO_INPUT:
             time_delta = time - self.input_time
-            
-            if raw_input != RawCode.NO_INPUT:
-                threshold_delta = KEY_PRESS_FIRE_PERIOD if self.state in {KeyState.RELEASED, KeyState.PRESSED} else KEY_REPEAT_FIRE_PERIOD
-                  
-                if time_delta >= threshold_delta:
-                    self.input_time = time
-                    ret_key_code = self.rawinput_2_keycode(raw_input)
-                    
-                    if self.state == KeyState.RELEASED:
-                        ret_key_event = KeyEvent.PRESSED
-                        self.state = KeyState.PRESSED
-                    elif self.state == KeyState.PRESSED:
-                        ret_key_event = KeyEvent.REPEAT
-                        self.state = KeyState.REPEATING
-                    elif self.state == KeyState.REPEATING:
-                        ret_key_event = KeyEvent.REPEAT
+            threshold_delta = KEY_PRESS_FIRE_PERIOD if self.state in {KeyState.RELEASED, KeyState.PRESSED} else KEY_REPEAT_FIRE_PERIOD
+
+            if time_delta >= threshold_delta:
+                self.input_time = time
+                ret_key_code = self.rawinput_2_keycode(raw_input)
+
+                if self.state == KeyState.RELEASED:
+                    ret_key_event = KeyEvent.PRESSED
+                    self.state = KeyState.PRESSED
+                elif self.state == KeyState.PRESSED:
+                    ret_key_event = KeyEvent.REPEAT
+                    self.state = KeyState.REPEATING
+                elif self.state == KeyState.REPEATING:
+                    ret_key_event = KeyEvent.REPEAT
 
 
         return ret_key_code, ret_key_event

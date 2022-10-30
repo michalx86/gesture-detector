@@ -5,14 +5,16 @@ from gstreamer.key_emitter import KeyCode
 from gstreamer.key_emitter import KeyEvent
 import unittest
 
-TIMESTAMP_START                 = 2000 * 1000
-TIMESTAMP_KEY_DOWN              = 3000 * 1000
-TIMESTAMP_KEY_RELEASE_NOKEY     = 3001 * 1000
-TIMESTAMP_KEY_PRESS             = 5000 * 1000
-TIMESTAMP_KEY_RELEASE           = 5001 * 1000
-TIMESTAMP_KEY_REPEAT_01         = 7000 * 1000
-TIMESTAMP_KEY_REPEAT_02         = 8000 * 1000
-TIMESTAMP_KEY_RELEASE_REPEAT_02 = 8001 * 1000
+KEY_PRESS_THRESHOLD = 2000 * 1000
+
+TIMESTAMP_START                 = 0000 * 1000
+TIMESTAMP_KEY_DOWN              = 1000 * 1000
+TIMESTAMP_KEY_RELEASE_NOKEY     = 1001 * 1000
+TIMESTAMP_KEY_PRESS             = 3000 * 1000
+TIMESTAMP_KEY_RELEASE           = 3001 * 1000
+TIMESTAMP_KEY_REPEAT_01         = 5000 * 1000
+TIMESTAMP_KEY_REPEAT_02         = 6000 * 1000
+TIMESTAMP_KEY_RELEASE_REPEAT_02 = 6001 * 1000
 
 
 class TestKeyEmitter(unittest.TestCase):
@@ -43,6 +45,9 @@ class TestKeyEmitter(unittest.TestCase):
                 (RawCode.GEST_DOWN, TIMESTAMP_KEY_DOWN,    (KeyCode.NO_KEY, KeyEvent.NO_EVENT)),
                 (RawCode.GEST_DOWN, TIMESTAMP_KEY_PRESS,   (KeyCode.DOWN,   KeyEvent.PRESSED)),
                 (RawCode.NO_INPUT,  TIMESTAMP_KEY_RELEASE, (KeyCode.DOWN,   KeyEvent.RELEASED)),
+                (RawCode.GEST_DOWN, TIMESTAMP_KEY_RELEASE + TIMESTAMP_KEY_DOWN,    (KeyCode.NO_KEY, KeyEvent.NO_EVENT)),
+                (RawCode.GEST_DOWN, TIMESTAMP_KEY_RELEASE + TIMESTAMP_KEY_PRESS,   (KeyCode.DOWN,   KeyEvent.PRESSED)),
+                (RawCode.NO_INPUT,  TIMESTAMP_KEY_RELEASE + TIMESTAMP_KEY_RELEASE, (KeyCode.DOWN,   KeyEvent.RELEASED)),
                 ]
 
         for i, received, expected in self.enumerate_and_execute(key_sequence):
@@ -75,6 +80,20 @@ class TestKeyEmitter(unittest.TestCase):
                 (RawCode.GEST_OK,  TIMESTAMP_KEY_REPEAT_02 + 1,         (KeyCode.NO_KEY, KeyEvent.NO_EVENT)),
                 (RawCode.NO_INPUT, TIMESTAMP_KEY_RELEASE_REPEAT_02,     (KeyCode.OK,     KeyEvent.RELEASED)),
                 (RawCode.GEST_OK,  TIMESTAMP_KEY_RELEASE_REPEAT_02 + 1, (KeyCode.NO_KEY, KeyEvent.NO_EVENT)),
+                ]
+
+        for i, received, expected in self.enumerate_and_execute(key_sequence):
+            self.assertEqual(received, expected, "Failed at index: {}".format(i))
+
+    def test_push_input_press_key_on_other_press_key(self):
+        key_sequence = [
+                (RawCode.NO_INPUT,  TIMESTAMP_START,       (KeyCode.NO_KEY, KeyEvent.NO_EVENT)),
+                (RawCode.GEST_DOWN, TIMESTAMP_KEY_DOWN,    (KeyCode.NO_KEY, KeyEvent.NO_EVENT)),
+                (RawCode.GEST_DOWN, TIMESTAMP_KEY_PRESS,   (KeyCode.DOWN,   KeyEvent.PRESSED)),
+                (RawCode.GEST_OK,   TIMESTAMP_KEY_RELEASE, (KeyCode.DOWN,   KeyEvent.RELEASED)),
+                (RawCode.GEST_OK,   TIMESTAMP_KEY_RELEASE + 1,                       (KeyCode.NO_KEY, KeyEvent.NO_EVENT)),
+                (RawCode.GEST_OK,   TIMESTAMP_KEY_RELEASE + KEY_PRESS_THRESHOLD,     (KeyCode.OK,   KeyEvent.PRESSED)),
+                (RawCode.NO_INPUT,  TIMESTAMP_KEY_RELEASE + KEY_PRESS_THRESHOLD + 1, (KeyCode.OK,   KeyEvent.RELEASED)),
                 ]
 
         for i, received, expected in self.enumerate_and_execute(key_sequence):
