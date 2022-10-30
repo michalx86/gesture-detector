@@ -24,7 +24,8 @@ class KeyEvent(Enum):
     REPEAT   = 8002
     RELEASED = 8003
 
-KEY_PRESS_FIRE_PERIOD = 2000 * 1000
+KEY_PRESS_FIRE_PERIOD  = 2000 * 1000
+KEY_REPEAT_FIRE_PERIOD = 1000 * 1000
 
 class KeyEmitter:
     def __init__(self):
@@ -56,10 +57,20 @@ class KeyEmitter:
         if ret_key_event != KeyEvent.RELEASED:
             time_delta = time - self.input_time
             
-            if raw_input != RawCode.NO_INPUT and time_delta >= KEY_PRESS_FIRE_PERIOD:
-                ret_key_code = self.rawinput_2_keycode(raw_input)
-                ret_key_event = KeyEvent.PRESSED
-                self.state = KeyState.PRESSED
+            if raw_input != RawCode.NO_INPUT:
+                threshold_delta = KEY_PRESS_FIRE_PERIOD if self.state in {KeyState.RELEASED, KeyState.PRESSED} else KEY_REPEAT_FIRE_PERIOD
+                  
+                if time_delta >= threshold_delta:
+                    ret_key_code = self.rawinput_2_keycode(raw_input)
+                    
+                    if self.state == KeyState.RELEASED:
+                        ret_key_event = KeyEvent.PRESSED
+                        self.state = KeyState.PRESSED
+                    elif self.state == KeyState.PRESSED:
+                        ret_key_event = KeyEvent.REPEAT
+                        self.state = KeyState.REPEATING
+                    elif self.state == KeyState.REPEATING:
+                        ret_key_event = KeyEvent.REPEAT
 
 
         return ret_key_code, ret_key_event
