@@ -61,6 +61,7 @@ class KeyEmitter:
                 threshold_delta = KEY_PRESS_FIRE_PERIOD if self.state in {KeyState.RELEASED, KeyState.PRESSED} else KEY_REPEAT_FIRE_PERIOD
                   
                 if time_delta >= threshold_delta:
+                    self.input_time = time
                     ret_key_code = self.rawinput_2_keycode(raw_input)
                     
                     if self.state == KeyState.RELEASED:

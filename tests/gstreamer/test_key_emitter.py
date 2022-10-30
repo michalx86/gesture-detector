@@ -41,8 +41,8 @@ class TestKeyEmitter(unittest.TestCase):
         key_sequence = [
                 (RawCode.NO_INPUT,  TIMESTAMP_START,       (KeyCode.NO_KEY, KeyEvent.NO_EVENT)),
                 (RawCode.GEST_DOWN, TIMESTAMP_KEY_DOWN,    (KeyCode.NO_KEY, KeyEvent.NO_EVENT)),
-                (RawCode.GEST_DOWN, TIMESTAMP_KEY_PRESS,   (KeyCode.DOWN, KeyEvent.PRESSED)),
-                (RawCode.NO_INPUT,  TIMESTAMP_KEY_RELEASE, (KeyCode.DOWN, KeyEvent.RELEASED)),
+                (RawCode.GEST_DOWN, TIMESTAMP_KEY_PRESS,   (KeyCode.DOWN,   KeyEvent.PRESSED)),
+                (RawCode.NO_INPUT,  TIMESTAMP_KEY_RELEASE, (KeyCode.DOWN,   KeyEvent.RELEASED)),
                 ]
 
         for i, received, expected in self.enumerate_and_execute(key_sequence):
@@ -52,10 +52,29 @@ class TestKeyEmitter(unittest.TestCase):
         key_sequence = [
                 (RawCode.NO_INPUT, TIMESTAMP_START,                 (KeyCode.NO_KEY, KeyEvent.NO_EVENT)),
                 (RawCode.GEST_OK,  TIMESTAMP_KEY_DOWN,              (KeyCode.NO_KEY, KeyEvent.NO_EVENT)),
-                (RawCode.GEST_OK,  TIMESTAMP_KEY_PRESS,             (KeyCode.OK, KeyEvent.PRESSED)),
-                (RawCode.GEST_OK,  TIMESTAMP_KEY_REPEAT_01,         (KeyCode.OK, KeyEvent.REPEAT)),
-                (RawCode.GEST_OK,  TIMESTAMP_KEY_REPEAT_02,         (KeyCode.OK, KeyEvent.REPEAT)),
-                (RawCode.NO_INPUT, TIMESTAMP_KEY_RELEASE_REPEAT_02, (KeyCode.OK, KeyEvent.RELEASED)),
+                (RawCode.GEST_OK,  TIMESTAMP_KEY_PRESS,             (KeyCode.OK,     KeyEvent.PRESSED)),
+                (RawCode.GEST_OK,  TIMESTAMP_KEY_REPEAT_01,         (KeyCode.OK,     KeyEvent.REPEAT)),
+                (RawCode.GEST_OK,  TIMESTAMP_KEY_REPEAT_02,         (KeyCode.OK,     KeyEvent.REPEAT)),
+                (RawCode.NO_INPUT, TIMESTAMP_KEY_RELEASE_REPEAT_02, (KeyCode.OK,     KeyEvent.RELEASED)),
+                ]
+
+        for i, received, expected in self.enumerate_and_execute(key_sequence):
+            self.assertEqual(received, expected, "Failed at index: {}".format(i))
+
+    def test_push_input_repeat_key_check_no_duplicate_event(self):
+        key_sequence = [
+                (RawCode.NO_INPUT, TIMESTAMP_START,                     (KeyCode.NO_KEY, KeyEvent.NO_EVENT)),
+                (RawCode.NO_INPUT, TIMESTAMP_START + 1,                 (KeyCode.NO_KEY, KeyEvent.NO_EVENT)),
+                (RawCode.GEST_OK,  TIMESTAMP_KEY_DOWN,                  (KeyCode.NO_KEY, KeyEvent.NO_EVENT)),
+                (RawCode.GEST_OK,  TIMESTAMP_KEY_DOWN + 1,              (KeyCode.NO_KEY, KeyEvent.NO_EVENT)),
+                (RawCode.GEST_OK,  TIMESTAMP_KEY_PRESS,                 (KeyCode.OK,     KeyEvent.PRESSED)),
+                (RawCode.GEST_OK,  TIMESTAMP_KEY_PRESS + 1,             (KeyCode.NO_KEY, KeyEvent.NO_EVENT)),
+                (RawCode.GEST_OK,  TIMESTAMP_KEY_REPEAT_01,             (KeyCode.OK,     KeyEvent.REPEAT)),
+                (RawCode.GEST_OK,  TIMESTAMP_KEY_REPEAT_01 + 1,         (KeyCode.NO_KEY, KeyEvent.NO_EVENT)),
+                (RawCode.GEST_OK,  TIMESTAMP_KEY_REPEAT_02,             (KeyCode.OK,     KeyEvent.REPEAT)),
+                (RawCode.GEST_OK,  TIMESTAMP_KEY_REPEAT_02 + 1,         (KeyCode.NO_KEY, KeyEvent.NO_EVENT)),
+                (RawCode.NO_INPUT, TIMESTAMP_KEY_RELEASE_REPEAT_02,     (KeyCode.OK,     KeyEvent.RELEASED)),
+                (RawCode.GEST_OK,  TIMESTAMP_KEY_RELEASE_REPEAT_02 + 1, (KeyCode.NO_KEY, KeyEvent.NO_EVENT)),
                 ]
 
         for i, received, expected in self.enumerate_and_execute(key_sequence):
