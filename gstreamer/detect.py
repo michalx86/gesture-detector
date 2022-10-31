@@ -38,7 +38,8 @@ import time
 
 from common import avg_fps_counter, SVG
 import object_tracker
-import key_emitter
+from key_emitter import KeyEmitter
+from key_emitter import KeyCode
 from pycoral.adapters.common import input_size
 from pycoral.adapters.detect import get_objects
 from pycoral.utils.dataset import read_label_file
@@ -119,7 +120,7 @@ def main():
     # Average fps over last 30 frames.
     fps_counter = avg_fps_counter(30)
     tracked_obj = None
-    key_emtr = key_emitter.KeyEmitter()
+    key_emtr = KeyEmitter()
 
     def user_callback(input_tensor, src_size, inference_box):
       nonlocal fps_counter
@@ -136,7 +137,10 @@ def main():
 
       tracked_obj_id    = tracked_obj.id    if tracked_obj is not None else -1
       tracked_obj_score = tracked_obj.score if tracked_obj is not None else 0
-      key_emtr.push_input(tracked_obj_id, end_time)
+  
+      key,event = key_emtr.push_input(tracked_obj_id, end_time)
+      if key != KeyCode.NO_KEY:
+          print("Key: {}, Event {}".format(key, event))
 
       text_lines = [
           'Inference: {:.2f} ms'.format((end_time - start_time) * 1000),

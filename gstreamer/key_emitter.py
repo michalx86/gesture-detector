@@ -33,15 +33,13 @@ class KeyEmitter:
         self.input_time = 0
 
     def rawinput_2_keycode(self, raw_input):
-        if raw_input == RawCode.NO_INPUT:
-            return KeyCode.NO_KEY
-        elif raw_input == RawCode.GEST_UP:
+        if raw_input == RawCode.GEST_UP:
             return KeyCode.UP
         elif raw_input == RawCode.GEST_DOWN:
             return KeyCode.DOWN
         elif raw_input == RawCode.GEST_OK:
             return KeyCode.OK
-        return None
+        return KeyCode.NO_KEY
 
     def push_input(self, raw_input, time):
         raw_input = RawCode(raw_input)
