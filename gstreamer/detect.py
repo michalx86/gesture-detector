@@ -34,12 +34,14 @@ import argparse
 import colorsys
 import gstreamer
 import os
+import requests
 import time
 
 from common import avg_fps_counter, SVG
 import object_tracker
 from key_emitter import KeyEmitter
 from key_emitter import KeyCode
+from key_emitter import KeyEvent
 from pycoral.adapters.common import input_size
 from pycoral.adapters.detect import get_objects
 from pycoral.utils.dataset import read_label_file
@@ -139,8 +141,13 @@ def main():
       tracked_obj_score = tracked_obj.score if tracked_obj is not None else 0
   
       key,event = key_emtr.push_input(tracked_obj_id, end_time)
-      if key != KeyCode.NO_KEY:
+      if key != KeyCode.NO_KEY and event != KeyEvent.RELEASE:
           print("Key: {}, Event {}".format(key, event))
+          cpe_command = 'http://192.168.0.201:10014/keyinjector/emulateuserevent/{}/{}'.format(hex(key.value), KeyEvent.PRESS_RELEASE.value) 
+          # alternatively we could use event.value, but it is not intuitive with sign language
+          print(cpe_command)
+          response = requests.get(cpe_command)
+          print(response.text)
 
       text_lines = [
           'Inference: {:.2f} ms'.format((end_time - start_time) * 1000),
@@ -148,7 +155,7 @@ def main():
           'ID: {}'.format(tracked_obj_id if tracked_obj_id != -1 else '--'),
           'Score: {}'.format(tracked_obj_score),
       ]
-      print(' '.join(text_lines))
+      #print(' '.join(text_lines))
 
       return generate_svg(src_size, inference_box, objs, labels, label_colors, text_lines)
 

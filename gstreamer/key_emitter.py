@@ -13,15 +13,21 @@ class RawCode(Enum):
 
 class KeyCode(Enum):
     NO_KEY = 0
-    UP = 81
-    DOWN = 82
-    OK = 85
+    UP     = 0x81
+    DOWN   = 0x82
+    LEFT   = 0x83
+    RIGHT  = 0x84
+    OK     = 0x85
+    BACK   = 0x95
+    PAUSE  = 0x9b
+    MENU   = 0xc0
 
 class KeyEvent(Enum):
     NO_EVENT = 0
-    PRESSED  = 8000
-    RELEASED = 8100
+    PRESS    = 8000
+    RELEASE  = 8100
     REPEAT   = 8200
+    PRESS_RELEASE = 8300
 
 KEY_PRESS_FIRE_PERIOD  = 2.000
 KEY_REPEAT_FIRE_PERIOD = 1.000
@@ -50,18 +56,18 @@ class KeyEmitter:
             self.input_time = time
             if self.state != KeyState.RELEASED:
                 ret_key_code = self.rawinput_2_keycode(self.raw_input) 
-                ret_key_event = KeyEvent.RELEASED
+                ret_key_event = KeyEvent.RELEASE
                 self.state = KeyState.RELEASED
             self.raw_input = raw_input
 
-        if ret_key_event != KeyEvent.RELEASED and raw_input != RawCode.NO_INPUT:
+        if ret_key_event != KeyEvent.RELEASE and raw_input != RawCode.NO_INPUT:
             threshold_delta = KEY_PRESS_FIRE_PERIOD if self.state in {KeyState.RELEASED, KeyState.PRESSED} else KEY_REPEAT_FIRE_PERIOD
             if time >= self.input_time + threshold_delta:
                 self.input_time = time
                 ret_key_code = self.rawinput_2_keycode(raw_input)
 
                 if self.state == KeyState.RELEASED:
-                    ret_key_event = KeyEvent.PRESSED
+                    ret_key_event = KeyEvent.PRESS
                     self.state = KeyState.PRESSED
                 elif self.state == KeyState.PRESSED:
                     ret_key_event = KeyEvent.REPEAT
