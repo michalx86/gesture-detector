@@ -13,15 +13,15 @@ class RawCode(Enum):
 
 class KeyCode(Enum):
     NO_KEY = 0
-    UP = 45
-    DOWN = 46
-    OK = 47
+    UP = 81
+    DOWN = 82
+    OK = 85
 
 class KeyEvent(Enum):
     NO_EVENT = 0
-    PRESSED  = 8001
-    REPEAT   = 8002
-    RELEASED = 8003
+    PRESSED  = 8000
+    RELEASED = 8100
+    REPEAT   = 8200
 
 KEY_PRESS_FIRE_PERIOD  = 2.000
 KEY_REPEAT_FIRE_PERIOD = 1.000
