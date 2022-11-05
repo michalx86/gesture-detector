@@ -6,10 +6,16 @@ class KeyState(Enum):
     REPEATING = 3
 
 class RawCode(Enum):
-    NO_INPUT = -1
-    GEST_UP = 0
-    GEST_DOWN = 1
-    GEST_OK = 2
+    NO_INPUT   = -1
+    GEST_UP    = 0
+    GEST_DOWN  = 1
+    GEST_LEFT  = 2
+    GEST_RIGHT = 3
+    GEST_OK    = 4
+    GEST_BACK  = 5
+    GEST_EXIT  = 6
+    GEST_MENU  = 7
+    GEST_PAUSE = 8
 
 class KeyCode(Enum):
     NO_KEY = 0
@@ -19,8 +25,8 @@ class KeyCode(Enum):
     RIGHT  = 0x84
     OK     = 0x85
     BACK   = 0x95
-    PAUSE  = 0x9b
     MENU   = 0xc0
+    PAUSE  = 0x9b
 
 class KeyEvent(Enum):
     NO_EVENT = 0
@@ -43,8 +49,20 @@ class KeyEmitter:
             return KeyCode.UP
         elif raw_input == RawCode.GEST_DOWN:
             return KeyCode.DOWN
+        elif raw_input == RawCode.GEST_LEFT:
+            return KeyCode.LEFT
+        elif raw_input == RawCode.GEST_RIGHT:
+            return KeyCode.RIGHT
         elif raw_input == RawCode.GEST_OK:
             return KeyCode.OK
+        elif raw_input == RawCode.GEST_BACK:
+            return KeyCode.BACK
+        elif raw_input == RawCode.GEST_EXIT:
+            return KeyCode.BACK # raw Exit and Back are mapped to the same key BACK
+        elif raw_input == RawCode.GEST_MENU:
+            return KeyCode.MENU
+        elif raw_input == RawCode.GEST_PAUSE:
+            return KeyCode.PAUSE
         return KeyCode.NO_KEY
 
     def push_input(self, raw_input, time):

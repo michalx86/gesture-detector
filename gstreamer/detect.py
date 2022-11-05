@@ -41,6 +41,7 @@ from common import avg_fps_counter, SVG
 import object_tracker
 from key_emitter import KeyEmitter
 from key_emitter import KeyCode
+from key_emitter import RawCode
 from key_emitter import KeyEvent
 from pycoral.adapters.common import input_size
 from pycoral.adapters.detect import get_objects
@@ -134,7 +135,7 @@ def main():
       objs = get_objects(interpreter, args.threshold)[:args.top_k]
       end_time = time.monotonic()
 
-      filtered_objs = list(filter( lambda obj: obj.score > 0.5 and obj.id != 3 and obj.id != 4, objs))
+      filtered_objs = list(filter( lambda obj: obj.score > 0.5 and obj.id <= RawCode.GEST_PAUSE.value, objs))
       tracked_obj = object_tracker.track(tracked_obj, filtered_objs)
 
       tracked_obj_id    = tracked_obj.id    if tracked_obj is not None else -1
