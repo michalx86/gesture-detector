@@ -208,13 +208,24 @@ def run_pipeline(user_function,
                  videosrc='/dev/video1',
                  videofmt='raw',
                  headless=False,
-                 crop=False):
+                 crop=False,
+                 zoom_factor=1.0):
+
+    raw_src_size = src_size
+
     if videofmt == 'h264':
         SRC_CAPS = 'video/x-h264,width={width},height={height},framerate=30/1'
     elif videofmt == 'jpeg':
         SRC_CAPS = 'image/jpeg,width={width},height={height},framerate=30/1'
     else:
-        SRC_CAPS = 'video/x-raw,width={width},height={height},framerate=30/1'
+        SRC_CAPS = 'video/x-raw,width={width},height={height},'
+        framerate=30
+        if src_size[0] == 1280:
+            framerate = 10
+        elif src_size[0] == 800:
+            framerate = 20
+        SRC_CAPS += 'framerate={}/1'.format(framerate)
+
     if videosrc.startswith('/dev/video'):
         PIPELINE = 'v4l2src device=%s ! {src_caps}'%videosrc
     elif videosrc.startswith('http'):
@@ -247,19 +258,35 @@ def run_pipeline(user_function,
             """
             scale_caps = 'video/x-raw,format=BGRA,width={w},height={h}'.format(w=src_size[0], h=src_size[1])
         else:
-            PIPELINE += """ ! decodebin ! glupload ! tee name=t"""
             if crop:
-                PIPELINE += """
-                  t. ! queue ! glfilterbin filter=glcropbox name=glbox ! {sink_caps} ! {sink_element}
-                  t. ! queue ! glfilterbin filter=glcropbox name=glbox1 ! glsvgoverlaysink name=overlaysink
+                # Make video input square to utilize Neural Network input fully (NN inputs are sqare - see inference_box)
+
+                # Method 1 - use custom plugin - glcropbox
+                src_size = (src_size[1], src_size[1])
+                PIPELINE += """ ! decodebin ! glupload ! tee name=t
                 """
+                PIPELINE += '  t. ! queue ! glfilterbin filter="glcropbox zoom-factor={zoom_factor}" name=glbox'.format(zoom_factor=zoom_factor)
+                PIPELINE += """ ! {sink_caps} ! {sink_element}
+                """
+                PIPELINE += '  t. ! queue ! glfilterbin filter="glcropbox zoom-factor={zoom_factor}" name=glbox1'.format(zoom_factor=zoom_factor)
+                PIPELINE += ' ! video/x-raw,format=RGB,width={w},height={h} ! glsvgoverlaysink name=overlaysink'.format(w=src_size[0], h=src_size[1])
+
+                # Method 2 - use videocrop plugin
+                #additional_crop = 45 # works as zoom factor
+                #crop_w = (src_size[0] - src_size[1]) // 2 + additional_crop
+                #crop_h = additional_crop
+                #src_size = (src_size[1] - additional_crop * 2, src_size[1] - additional_crop * 2)
+                #PIPELINE += '! videocrop top={crop_vert} left={crop_horiz} right={crop_horiz} bottom={crop_vert}'.format(crop_horiz=crop_w, crop_vert=crop_h)
+                #PIPELINE += """ ! decodebin ! glupload ! tee name=t
+                #  t. ! queue ! glfilterbin filter=glbox name=glbox ! {sink_caps} ! {sink_element}
+                #  t. ! queue ! glsvgoverlaysink name=overlaysink
+                #"""
+
             else:
-                PIPELINE += """
+                PIPELINE += """ ! decodebin ! glupload ! tee name=t
                   t. ! queue ! glfilterbin filter=glbox name=glbox ! {sink_caps} ! {sink_element}
                   t. ! queue ! glsvgoverlaysink name=overlaysink
                 """
-            # ! videocrop top=300 left=400 right=400 bottom=300
-            # t. ! queue ! glfilterbin filter=glbox name=glbox ! {sink_caps} ! {sink_element}
             scale_caps = None
     else:
         scale = min(appsink_size[0] / src_size[0], appsink_size[1] / src_size[1])
@@ -276,7 +303,7 @@ def run_pipeline(user_function,
     SINK_CAPS = 'video/x-raw,format=RGB,width={width},height={height}'
     LEAKY_Q = 'queue max-size-buffers=1 leaky=downstream'
 
-    src_caps = SRC_CAPS.format(width=src_size[0], height=src_size[1])
+    src_caps = SRC_CAPS.format(width=raw_src_size[0], height=raw_src_size[1])
     sink_caps = SINK_CAPS.format(width=appsink_size[0], height=appsink_size[1])
     pipeline = PIPELINE.format(leaky_q=LEAKY_Q,
         src_caps=src_caps, sink_caps=sink_caps,

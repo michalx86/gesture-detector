@@ -110,6 +110,12 @@ def main():
     parser.add_argument('--videofmt', help='Input video format.',
                         default='raw',
                         choices=['raw', 'h264', 'jpeg'])
+    parser.add_argument('--crop', help='Input video should be cropped to aspect ratio 1:1',
+                        action='store_true')
+    parser.add_argument('--zoom_factor', type=float, default=1.0,
+                        help='Additional zoom when crop is used')
+    parser.set_defaults(crop=False)
+
     args = parser.parse_args()
 
     print('Loading {} with {} labels.'.format(args.model, args.labels))
@@ -161,10 +167,12 @@ def main():
       return generate_svg(src_size, inference_box, objs, labels, label_colors, text_lines)
 
     result = gstreamer.run_pipeline(user_callback,
-                                    src_size=(640, 480),
+                                    src_size=(640, 480), # (640,480) or (800, 600) or (1280,720)
                                     appsink_size=inference_size,
                                     videosrc=args.videosrc,
-                                    videofmt=args.videofmt)
+                                    videofmt=args.videofmt,
+                                    crop=args.crop,
+                                    zoom_factor=args.zoom_factor)
 
 if __name__ == '__main__':
     main()
