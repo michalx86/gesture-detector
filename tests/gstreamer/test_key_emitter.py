@@ -16,6 +16,11 @@ TIMESTAMP_KEY_REPEAT_01         = 5.000
 TIMESTAMP_KEY_REPEAT_02         = 6.000
 TIMESTAMP_KEY_RELEASE_REPEAT_02 = 6.001
 
+EMPTY_FILL_RATIO = 0.0
+PRESS_ALMOST_EMPTY_FILL_RATIO = 0.0004999999999999449 # ~ 0.001 / KEY_PRESS_THRESHOLD
+REPEAT_ALMOST_EMPTY_FILL_RATIO = 0.001000000000000334 # ~ 0.001 / KEY_REPEAT_THRESHOLD
+FULL_FILL_RATIO = 1.0
+
 
 class TestKeyEmitter(unittest.TestCase):
 
@@ -31,9 +36,9 @@ class TestKeyEmitter(unittest.TestCase):
 
     def test_push_input_press_key_too_short(self):
         key_sequence = [
-                (RawCode.NO_INPUT, TIMESTAMP_START,             (KeyCode.NO_KEY, KeyEvent.NO_EVENT)),
-                (RawCode.GEST_UP,  TIMESTAMP_KEY_DOWN,          (KeyCode.NO_KEY, KeyEvent.NO_EVENT)),
-                (RawCode.NO_INPUT, TIMESTAMP_KEY_RELEASE_NOKEY, (KeyCode.NO_KEY, KeyEvent.NO_EVENT)),
+                (RawCode.NO_INPUT, TIMESTAMP_START,             (KeyCode.NO_KEY, KeyEvent.NO_EVENT, EMPTY_FILL_RATIO)),
+                (RawCode.GEST_UP,  TIMESTAMP_KEY_DOWN,          (KeyCode.NO_KEY, KeyEvent.NO_EVENT, EMPTY_FILL_RATIO)),
+                (RawCode.NO_INPUT, TIMESTAMP_KEY_RELEASE_NOKEY, (KeyCode.NO_KEY, KeyEvent.NO_EVENT, EMPTY_FILL_RATIO)),
                 ]
 
         for i, received, expected in self.enumerate_and_execute(key_sequence):
@@ -41,13 +46,13 @@ class TestKeyEmitter(unittest.TestCase):
 
     def test_push_input_press_key(self):
         key_sequence = [
-                (RawCode.NO_INPUT,  TIMESTAMP_START,       (KeyCode.NO_KEY, KeyEvent.NO_EVENT)),
-                (RawCode.GEST_DOWN, TIMESTAMP_KEY_DOWN,    (KeyCode.NO_KEY, KeyEvent.NO_EVENT)),
-                (RawCode.GEST_DOWN, TIMESTAMP_KEY_PRESS,   (KeyCode.DOWN,   KeyEvent.PRESS)),
-                (RawCode.NO_INPUT,  TIMESTAMP_KEY_RELEASE, (KeyCode.DOWN,   KeyEvent.RELEASE)),
-                (RawCode.GEST_DOWN, TIMESTAMP_KEY_RELEASE + TIMESTAMP_KEY_DOWN,    (KeyCode.NO_KEY, KeyEvent.NO_EVENT)),
-                (RawCode.GEST_DOWN, TIMESTAMP_KEY_RELEASE + TIMESTAMP_KEY_PRESS,   (KeyCode.DOWN,   KeyEvent.PRESS)),
-                (RawCode.NO_INPUT,  TIMESTAMP_KEY_RELEASE + TIMESTAMP_KEY_RELEASE, (KeyCode.DOWN,   KeyEvent.RELEASE)),
+                (RawCode.NO_INPUT,  TIMESTAMP_START,       (KeyCode.NO_KEY, KeyEvent.NO_EVENT, EMPTY_FILL_RATIO)),
+                (RawCode.GEST_DOWN, TIMESTAMP_KEY_DOWN,    (KeyCode.NO_KEY, KeyEvent.NO_EVENT, EMPTY_FILL_RATIO)),
+                (RawCode.GEST_DOWN, TIMESTAMP_KEY_PRESS,   (KeyCode.DOWN,   KeyEvent.PRESS,    FULL_FILL_RATIO)),
+                (RawCode.NO_INPUT,  TIMESTAMP_KEY_RELEASE, (KeyCode.DOWN,   KeyEvent.RELEASE,  EMPTY_FILL_RATIO)),
+                (RawCode.GEST_DOWN, TIMESTAMP_KEY_RELEASE + TIMESTAMP_KEY_DOWN,    (KeyCode.NO_KEY, KeyEvent.NO_EVENT, EMPTY_FILL_RATIO)),
+                (RawCode.GEST_DOWN, TIMESTAMP_KEY_RELEASE + TIMESTAMP_KEY_PRESS,   (KeyCode.DOWN,   KeyEvent.PRESS,    FULL_FILL_RATIO)),
+                (RawCode.NO_INPUT,  TIMESTAMP_KEY_RELEASE + TIMESTAMP_KEY_RELEASE, (KeyCode.DOWN,   KeyEvent.RELEASE,  EMPTY_FILL_RATIO)),
                 ]
 
         for i, received, expected in self.enumerate_and_execute(key_sequence):
@@ -55,12 +60,12 @@ class TestKeyEmitter(unittest.TestCase):
 
     def test_push_input_repeat_key(self):
         key_sequence = [
-                (RawCode.NO_INPUT, TIMESTAMP_START,                 (KeyCode.NO_KEY, KeyEvent.NO_EVENT)),
-                (RawCode.GEST_OK,  TIMESTAMP_KEY_DOWN,              (KeyCode.NO_KEY, KeyEvent.NO_EVENT)),
-                (RawCode.GEST_OK,  TIMESTAMP_KEY_PRESS,             (KeyCode.OK,     KeyEvent.PRESS)),
-                (RawCode.GEST_OK,  TIMESTAMP_KEY_REPEAT_01,         (KeyCode.OK,     KeyEvent.REPEAT)),
-                (RawCode.GEST_OK,  TIMESTAMP_KEY_REPEAT_02,         (KeyCode.OK,     KeyEvent.REPEAT)),
-                (RawCode.NO_INPUT, TIMESTAMP_KEY_RELEASE_REPEAT_02, (KeyCode.OK,     KeyEvent.RELEASE)),
+                (RawCode.NO_INPUT, TIMESTAMP_START,                 (KeyCode.NO_KEY, KeyEvent.NO_EVENT, EMPTY_FILL_RATIO)),
+                (RawCode.GEST_OK,  TIMESTAMP_KEY_DOWN,              (KeyCode.NO_KEY, KeyEvent.NO_EVENT, EMPTY_FILL_RATIO)),
+                (RawCode.GEST_OK,  TIMESTAMP_KEY_PRESS,             (KeyCode.OK,     KeyEvent.PRESS,    FULL_FILL_RATIO)),
+                (RawCode.GEST_OK,  TIMESTAMP_KEY_REPEAT_01,         (KeyCode.OK,     KeyEvent.REPEAT,   FULL_FILL_RATIO)),
+                (RawCode.GEST_OK,  TIMESTAMP_KEY_REPEAT_02,         (KeyCode.OK,     KeyEvent.REPEAT,   FULL_FILL_RATIO)),
+                (RawCode.NO_INPUT, TIMESTAMP_KEY_RELEASE_REPEAT_02, (KeyCode.OK,     KeyEvent.RELEASE,  EMPTY_FILL_RATIO)),
                 ]
 
         for i, received, expected in self.enumerate_and_execute(key_sequence):
@@ -68,18 +73,18 @@ class TestKeyEmitter(unittest.TestCase):
 
     def test_push_input_repeat_key_check_no_duplicate_event(self):
         key_sequence = [
-                (RawCode.NO_INPUT, TIMESTAMP_START,                         (KeyCode.NO_KEY, KeyEvent.NO_EVENT)),
-                (RawCode.NO_INPUT, TIMESTAMP_START + 0.001,                 (KeyCode.NO_KEY, KeyEvent.NO_EVENT)),
-                (RawCode.GEST_OK,  TIMESTAMP_KEY_DOWN,                      (KeyCode.NO_KEY, KeyEvent.NO_EVENT)),
-                (RawCode.GEST_OK,  TIMESTAMP_KEY_DOWN + 0.001,              (KeyCode.NO_KEY, KeyEvent.NO_EVENT)),
-                (RawCode.GEST_OK,  TIMESTAMP_KEY_PRESS,                     (KeyCode.OK,     KeyEvent.PRESS)),
-                (RawCode.GEST_OK,  TIMESTAMP_KEY_PRESS + 0.001,             (KeyCode.NO_KEY, KeyEvent.NO_EVENT)),
-                (RawCode.GEST_OK,  TIMESTAMP_KEY_REPEAT_01,                 (KeyCode.OK,     KeyEvent.REPEAT)),
-                (RawCode.GEST_OK,  TIMESTAMP_KEY_REPEAT_01 + 0.001,         (KeyCode.NO_KEY, KeyEvent.NO_EVENT)),
-                (RawCode.GEST_OK,  TIMESTAMP_KEY_REPEAT_02,                 (KeyCode.OK,     KeyEvent.REPEAT)),
-                (RawCode.GEST_OK,  TIMESTAMP_KEY_REPEAT_02 + 0.001,         (KeyCode.NO_KEY, KeyEvent.NO_EVENT)),
-                (RawCode.NO_INPUT, TIMESTAMP_KEY_RELEASE_REPEAT_02,         (KeyCode.OK,     KeyEvent.RELEASE)),
-                (RawCode.GEST_OK,  TIMESTAMP_KEY_RELEASE_REPEAT_02 + 0.001, (KeyCode.NO_KEY, KeyEvent.NO_EVENT)),
+                (RawCode.NO_INPUT, TIMESTAMP_START,                         (KeyCode.NO_KEY, KeyEvent.NO_EVENT, EMPTY_FILL_RATIO)),
+                (RawCode.NO_INPUT, TIMESTAMP_START + 0.001,                 (KeyCode.NO_KEY, KeyEvent.NO_EVENT, EMPTY_FILL_RATIO)),
+                (RawCode.GEST_OK,  TIMESTAMP_KEY_DOWN,                      (KeyCode.NO_KEY, KeyEvent.NO_EVENT, EMPTY_FILL_RATIO)),
+                (RawCode.GEST_OK,  TIMESTAMP_KEY_DOWN + 0.001,              (KeyCode.NO_KEY, KeyEvent.NO_EVENT, PRESS_ALMOST_EMPTY_FILL_RATIO)),
+                (RawCode.GEST_OK,  TIMESTAMP_KEY_PRESS,                     (KeyCode.OK,     KeyEvent.PRESS,    FULL_FILL_RATIO)),
+                (RawCode.GEST_OK,  TIMESTAMP_KEY_PRESS + 0.001,             (KeyCode.NO_KEY, KeyEvent.NO_EVENT, PRESS_ALMOST_EMPTY_FILL_RATIO)),
+                (RawCode.GEST_OK,  TIMESTAMP_KEY_REPEAT_01,                 (KeyCode.OK,     KeyEvent.REPEAT,   FULL_FILL_RATIO)),
+                (RawCode.GEST_OK,  TIMESTAMP_KEY_REPEAT_01 + 0.001,         (KeyCode.NO_KEY, KeyEvent.NO_EVENT, REPEAT_ALMOST_EMPTY_FILL_RATIO)),
+                (RawCode.GEST_OK,  TIMESTAMP_KEY_REPEAT_02,                 (KeyCode.OK,     KeyEvent.REPEAT,   FULL_FILL_RATIO)),
+                (RawCode.GEST_OK,  TIMESTAMP_KEY_REPEAT_02 + 0.001,         (KeyCode.NO_KEY, KeyEvent.NO_EVENT, REPEAT_ALMOST_EMPTY_FILL_RATIO)),
+                (RawCode.NO_INPUT, TIMESTAMP_KEY_RELEASE_REPEAT_02,         (KeyCode.OK,     KeyEvent.RELEASE,  EMPTY_FILL_RATIO)),
+                (RawCode.GEST_OK,  TIMESTAMP_KEY_RELEASE_REPEAT_02 + 0.001, (KeyCode.NO_KEY, KeyEvent.NO_EVENT, EMPTY_FILL_RATIO)),
                 ]
 
         for i, received, expected in self.enumerate_and_execute(key_sequence):
@@ -87,13 +92,13 @@ class TestKeyEmitter(unittest.TestCase):
 
     def test_push_input_press_key_on_other_press_key(self):
         key_sequence = [
-                (RawCode.NO_INPUT,  TIMESTAMP_START,       (KeyCode.NO_KEY, KeyEvent.NO_EVENT)),
-                (RawCode.GEST_DOWN, TIMESTAMP_KEY_DOWN,    (KeyCode.NO_KEY, KeyEvent.NO_EVENT)),
-                (RawCode.GEST_DOWN, TIMESTAMP_KEY_PRESS,   (KeyCode.DOWN,   KeyEvent.PRESS)),
-                (RawCode.GEST_OK,   TIMESTAMP_KEY_RELEASE, (KeyCode.DOWN,   KeyEvent.RELEASE)),
-                (RawCode.GEST_OK,   TIMESTAMP_KEY_RELEASE + 0.001,                       (KeyCode.NO_KEY, KeyEvent.NO_EVENT)),
-                (RawCode.GEST_OK,   TIMESTAMP_KEY_RELEASE + KEY_PRESS_THRESHOLD,         (KeyCode.OK,   KeyEvent.PRESS)),
-                (RawCode.NO_INPUT,  TIMESTAMP_KEY_RELEASE + KEY_PRESS_THRESHOLD + 0.001, (KeyCode.OK,   KeyEvent.RELEASE)),
+                (RawCode.NO_INPUT,  TIMESTAMP_START,       (KeyCode.NO_KEY, KeyEvent.NO_EVENT, EMPTY_FILL_RATIO)),
+                (RawCode.GEST_DOWN, TIMESTAMP_KEY_DOWN,    (KeyCode.NO_KEY, KeyEvent.NO_EVENT, EMPTY_FILL_RATIO)),
+                (RawCode.GEST_DOWN, TIMESTAMP_KEY_PRESS,   (KeyCode.DOWN,   KeyEvent.PRESS,    FULL_FILL_RATIO)),
+                (RawCode.GEST_OK,   TIMESTAMP_KEY_RELEASE, (KeyCode.DOWN,   KeyEvent.RELEASE,  EMPTY_FILL_RATIO)),
+                (RawCode.GEST_OK,   TIMESTAMP_KEY_RELEASE + 0.001,                       (KeyCode.NO_KEY, KeyEvent.NO_EVENT, PRESS_ALMOST_EMPTY_FILL_RATIO)),
+                (RawCode.GEST_OK,   TIMESTAMP_KEY_RELEASE + KEY_PRESS_THRESHOLD,         (KeyCode.OK,     KeyEvent.PRESS,    FULL_FILL_RATIO)),
+                (RawCode.NO_INPUT,  TIMESTAMP_KEY_RELEASE + KEY_PRESS_THRESHOLD + 0.001, (KeyCode.OK,     KeyEvent.RELEASE,  EMPTY_FILL_RATIO)),
                 ]
 
         for i, received, expected in self.enumerate_and_execute(key_sequence):

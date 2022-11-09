@@ -69,6 +69,7 @@ class KeyEmitter:
         raw_input = RawCode(raw_input)
         ret_key_code = KeyCode.NO_KEY
         ret_key_event = KeyEvent.NO_EVENT
+        ret_fill_ratio = 0.0
 
         if self.raw_input != raw_input:
             self.input_time = time
@@ -80,9 +81,11 @@ class KeyEmitter:
 
         if ret_key_event != KeyEvent.RELEASE and raw_input != RawCode.NO_INPUT:
             threshold_delta = KEY_PRESS_FIRE_PERIOD if self.state in {KeyState.RELEASED, KeyState.PRESSED} else KEY_REPEAT_FIRE_PERIOD
-            if time >= self.input_time + threshold_delta:
+            key_fire_time = self.input_time + threshold_delta 
+            if time >= key_fire_time:
                 self.input_time = time
                 ret_key_code = self.rawinput_2_keycode(raw_input)
+                ret_fill_ratio = 1.0
 
                 if self.state == KeyState.RELEASED:
                     ret_key_event = KeyEvent.PRESS
@@ -92,7 +95,10 @@ class KeyEmitter:
                     self.state = KeyState.REPEATING
                 elif self.state == KeyState.REPEATING:
                     ret_key_event = KeyEvent.REPEAT
+            else:
+                time_elapsed = time - self.input_time
+                if time_elapsed > 0:
+                    ret_fill_ratio = time_elapsed / threshold_delta
 
-
-        return ret_key_code, ret_key_event
+        return ret_key_code, ret_key_event, ret_fill_ratio
 

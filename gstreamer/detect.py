@@ -66,8 +66,23 @@ def make_label_colors(labels):
 
     return lambda obj_id: 'white'
 
+OUTLINE_COLOR = 'rgb(255,255,255)'
+OUTLINE_WIDTH = 2
+LINE_COLOR = 'rgb(200,200,200)'
+LINE_WIDTH = 4
+FILL_COLOR = 'rgb(255,255,255)'
+PROGRESS_BAR_WIDTH_RATIO = 0.1
 
-def generate_svg(src_size, inference_box, objs, labels, label_colors, text_lines):
+def calc_coord(bbox, box_x, box_y, scale_x, scale_y):
+    # Absolute coordinates, input tensor space.
+    x, y = bbox.xmin, bbox.ymin
+    w, h = bbox.width, bbox.height
+    # Subtract boxing offset.
+    x, y = x - box_x, y - box_y
+    # Scale to source coordinate space.
+    return x * scale_x, y * scale_y, w * scale_x, h * scale_y
+
+def generate_svg(src_size, inference_box, objs, labels, label_colors, text_lines, tracked_obj):
     svg = SVG(src_size)
     src_w, src_h = src_size
     box_x, box_y, box_w, box_h = inference_box
@@ -79,17 +94,25 @@ def generate_svg(src_size, inference_box, objs, labels, label_colors, text_lines
         bbox = obj.bbox
         if not bbox.valid:
             continue
-        # Absolute coordinates, input tensor space.
-        x, y = bbox.xmin, bbox.ymin
-        w, h = bbox.width, bbox.height
-        # Subtract boxing offset.
-        x, y = x - box_x, y - box_y
-        # Scale to source coordinate space.
-        x, y, w, h = x * scale_x, y * scale_y, w * scale_x, h * scale_y
+        x, y, w, h = calc_coord(bbox, box_x, box_y, scale_x, scale_y)
         percent = int(100 * obj.score)
         label = '{}% {}'.format(percent, labels.get(obj.id, obj.id))
         svg.add_text(x, y - 5, label, 20)
-        svg.add_rect(x, y, w, h, label_colors(obj.id), 4, obj.score)
+        svg.add_rect(x, y, w, h, label_colors(obj.id), LINE_WIDTH, obj.score)
+
+    if tracked_obj is not None:
+        bbox = tracked_obj.bbox
+        if bbox.valid:
+            x, y, w, h = calc_coord(bbox, box_x, box_y, scale_x, scale_y)
+            progressbar_width = w * tracked_obj.score - 2 * LINE_WIDTH
+            progressbar_height = h * PROGRESS_BAR_WIDTH_RATIO
+            svg.add_rect(x + LINE_WIDTH, y + LINE_WIDTH,
+                         progressbar_width, progressbar_height, 
+                         LINE_COLOR, LINE_WIDTH, 1.0, FILL_COLOR)
+            svg.add_rect(x + OUTLINE_WIDTH+1, y + OUTLINE_WIDTH+1,
+                         w - 2 * (OUTLINE_WIDTH + 1),  progressbar_height + OUTLINE_WIDTH, 
+                         OUTLINE_COLOR, OUTLINE_WIDTH, 1.0)
+
     return svg.finish()
 
 def main():
@@ -146,9 +169,12 @@ def main():
       tracked_obj = object_tracker.track(tracked_obj, filtered_objs)
 
       tracked_obj_id    = tracked_obj.id    if tracked_obj is not None else -1
-      tracked_obj_score = tracked_obj.score if tracked_obj is not None else 0
+      #tracked_obj_score = tracked_obj.score if tracked_obj is not None else 0
   
-      key,event = key_emtr.push_input(tracked_obj_id, end_time)
+      key,event,fill = key_emtr.push_input(tracked_obj_id, end_time)
+      if tracked_obj is not None:
+          tracked_obj = tracked_obj._replace(score = fill)
+
       if key != KeyCode.NO_KEY and event != KeyEvent.RELEASE:
           print("Key: {}, Event {}".format(key, event))
           cpe_command = 'http://{}:10014/keyinjector/emulateuserevent/{}/{}'.format(args.cpeip, hex(key.value), KeyEvent.PRESS_RELEASE.value) 
@@ -160,12 +186,12 @@ def main():
       text_lines = [
           'Inference: {:_>3.0f} ms'.format((end_time - start_time) * 1000),
           'FPS: {} fps'.format(round(next(fps_counter))),
-          'ID: {}'.format(tracked_obj_id if tracked_obj_id != -1 else '--'),
-          'Score: {}'.format(tracked_obj_score),
+          #'ID: {}'.format(tracked_obj_id if tracked_obj_id != -1 else '--'),
+          #'Score: {}'.format(tracked_obj_score),
       ]
       #print(' '.join(text_lines))
 
-      return generate_svg(src_size, inference_box, objs, labels, label_colors, text_lines)
+      return generate_svg(src_size, inference_box, objs, labels, label_colors, text_lines, tracked_obj)
 
     result = gstreamer.run_pipeline(user_callback,
                                     src_size=(640, 480), # (640,480) or (800, 600) or (1280,720)
