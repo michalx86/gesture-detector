@@ -114,6 +114,7 @@ def main():
                         action='store_true')
     parser.add_argument('--zoom_factor', type=float, default=1.0,
                         help='Additional zoom when crop is used')
+    parser.add_argument('--cpeip', help='IP address of CPE to send keycodes to')
     parser.set_defaults(crop=False)
 
     args = parser.parse_args()
@@ -150,14 +151,14 @@ def main():
       key,event = key_emtr.push_input(tracked_obj_id, end_time)
       if key != KeyCode.NO_KEY and event != KeyEvent.RELEASE:
           print("Key: {}, Event {}".format(key, event))
-          cpe_command = 'http://192.168.0.201:10014/keyinjector/emulateuserevent/{}/{}'.format(hex(key.value), KeyEvent.PRESS_RELEASE.value) 
+          cpe_command = 'http://{}:10014/keyinjector/emulateuserevent/{}/{}'.format(args.cpeip, hex(key.value), KeyEvent.PRESS_RELEASE.value) 
           # alternatively we could use event.value, but it is not intuitive with sign language
           print(cpe_command)
           response = requests.get(cpe_command)
           print(response.text)
 
       text_lines = [
-          'Inference: {:.2f} ms'.format((end_time - start_time) * 1000),
+          'Inference: {:_>3.0f} ms'.format((end_time - start_time) * 1000),
           'FPS: {} fps'.format(round(next(fps_counter))),
           'ID: {}'.format(tracked_obj_id if tracked_obj_id != -1 else '--'),
           'Score: {}'.format(tracked_obj_score),
