@@ -177,11 +177,12 @@ def main():
 
       if key != KeyCode.NO_KEY and event != KeyEvent.RELEASE:
           print("Key: {}, Event {}".format(key, event))
-          cpe_command = 'http://{}:10014/keyinjector/emulateuserevent/{}/{}'.format(args.cpeip, hex(key.value), KeyEvent.PRESS_RELEASE.value) 
-          # alternatively we could use event.value, but it is not intuitive with sign language
-          print(cpe_command)
-          response = requests.get(cpe_command)
-          print(response.text)
+          if args.cpeip is not None:
+              cpe_command = 'http://{}:10014/keyinjector/emulateuserevent/{}/{}'.format(args.cpeip, hex(key.value), KeyEvent.PRESS_RELEASE.value) 
+              # alternatively we could use event.value, but it is not intuitive with sign language
+              print(cpe_command)
+              response = requests.get(cpe_command)
+              print(response.text)
 
       text_lines = [
           'Inference: {:_>3.0f} ms'.format((end_time - start_time) * 1000),
