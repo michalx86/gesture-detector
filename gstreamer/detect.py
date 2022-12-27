@@ -49,6 +49,9 @@ from pycoral.utils.dataset import read_label_file
 from pycoral.utils.edgetpu import make_interpreter
 from pycoral.utils.edgetpu import run_inference
 
+from pycoral.adapters import classify
+from pycoral.adapters.common import set_input
+from PIL import Image
 
 def rgb(color):
     return 'rgb(%s, %s, %s)' % color
@@ -150,6 +153,14 @@ def main():
 
     label_colors = make_label_colors(labels)
 
+    interpreter_classifier = make_interpreter('/home/mendel/edgetpu/retrain-imprinting/retrained_imprinting_model.tflite')
+    interpreter_classifier.allocate_tensors()
+    classifier_size = input_size(interpreter_classifier)
+    #classifier_img = Image.open(os.path.join('/home/mendel/edgetpu/retrain-imprinting/FamFaces', 'Michal', 'FaceMichal_00.jpg')).resize(classifier_size, Image.NEAREST)
+    #classifier_img = Image.open(os.path.join('/home/mendel/edgetpu/retrain-imprinting/FamFaces', 'Kuba', 'FaceKuba_07.jpg')).resize(classifier_size, Image.NEAREST)
+    classifier_img = Image.open(os.path.join('/home/mendel/edgetpu/retrain-imprinting/FamFaces', 'Lidia', 'FaceLidia_01.jpg')).resize(classifier_size, Image.NEAREST)
+
+
     # Average fps over last 30 frames.
     fps_counter = avg_fps_counter(30)
     tracked_obj = None
@@ -163,6 +174,13 @@ def main():
       run_inference(interpreter, input_tensor)
       # For larger input image sizes, use the edgetpu.classification.engine for better performance
       objs = get_objects(interpreter, args.threshold)[:args.top_k]
+
+      #set_input(interpreter_classifier, classifier_img)
+      #interpreter_classifier.invoke()
+      #candidates = classify.get_classes(interpreter_classifier, 5, score_threshold=0.1)
+      #print("Classifier candidates lent: {}, id: {}".format(len(candidates), candidates[0].id))
+
+
       end_time = time.monotonic()
 
       filtered_objs = list(filter( lambda obj: obj.score > 0.5 and obj.id <= RawCode.GEST_PAUSE.value, objs))
