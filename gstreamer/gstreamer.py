@@ -29,6 +29,7 @@ class GstPipeline:
         self.running = False
         self.gstsample = None
         self.sink_size = None
+        self.sink_num = 0
         self.src_size = src_size
         self.box = None
         self.condition = threading.Condition()
@@ -38,9 +39,13 @@ class GstPipeline:
         self.gloverlay = self.pipeline.get_by_name('gloverlay')
         self.overlaysink = self.pipeline.get_by_name('overlaysink')
 
-        appsink = self.pipeline.get_by_name('appsink')
-        appsink.connect('new-preroll', self.on_new_sample, True)
-        appsink.connect('new-sample', self.on_new_sample, False)
+        #appsink = self.pipeline.get_by_name('appsink')
+        #appsink.connect('new-preroll', self.on_new_sample0, True)
+        #appsink.connect('new-sample', self.on_new_sample0, False)
+
+        appsink1 = self.pipeline.get_by_name('appsink1')
+        appsink1.connect('new-preroll', self.on_new_sample1, True)
+        appsink1.connect('new-sample', self.on_new_sample1, False)
 
         # Set up a pipeline bus watch to catch errors.
         bus = self.pipeline.get_bus()
@@ -85,6 +90,15 @@ class GstPipeline:
             Gtk.main_quit()
         return True
 
+    def on_new_sample0(self, sink, preroll):
+        self.sink_num = 0
+        #return self.on_new_sample(sink, preroll)
+        return Gst.FlowReturn.OK
+
+    def on_new_sample1(self, sink, preroll):
+        self.sink_num = 1
+        return self.on_new_sample(sink, preroll)
+
     def on_new_sample(self, sink, preroll):
         sample = sink.emit('pull-preroll' if preroll else 'pull-sample')
         if not self.sink_size:
@@ -110,7 +124,7 @@ class GstPipeline:
                 self.box = (-box.get_property('left'), -box.get_property('top'),
                     self.sink_size[0] + box.get_property('left') + box.get_property('right'),
                     self.sink_size[1] + box.get_property('top') + box.get_property('bottom'))
-        return self.box
+            return self.box
 
     def inference_loop(self):
         while True:
@@ -124,7 +138,11 @@ class GstPipeline:
 
             # Passing Gst.Buffer as input tensor avoids 2 copies of it.
             gstbuffer = gstsample.get_buffer()
-            svg = self.user_function(gstbuffer, self.src_size, self.get_box())
+            if (self.sink_num == 0) :
+                svg = self.user_function(gstbuffer, self.src_size, self.get_box())
+            else : 
+                svg = self.user_function(gstbuffer, self.src_size, (0,0,224,224))
+            #svg = self.user_function(gstbuffer, self.src_size, self.get_box())
             if svg:
                 if self.overlay:
                     self.overlay.set_property('data', svg)
@@ -262,25 +280,26 @@ def run_pipeline(user_function,
                 # Make video input square to utilize Neural Network input fully (NN inputs are sqare - see inference_box)
 
                 # Method 1 - use custom plugin - glcropbox
-                src_size = (src_size[1], src_size[1])
-                PIPELINE += """ ! decodebin ! glupload ! tee name=t
-                """
-                PIPELINE += '  t. ! queue ! glfilterbin filter="glcropbox zoom-factor={zoom_factor}" name=glbox'.format(zoom_factor=zoom_factor)
-                PIPELINE += """ ! {sink_caps} ! {sink_element}
-                """
-                PIPELINE += '  t. ! queue ! glfilterbin filter="glcropbox zoom-factor={zoom_factor}" name=glbox1'.format(zoom_factor=zoom_factor)
-                PIPELINE += ' ! video/x-raw,format=RGB,width={w},height={h} ! glsvgoverlaysink name=overlaysink'.format(w=src_size[0], h=src_size[1])
+                #src_size = (src_size[1], src_size[1])
+                #PIPELINE += """ ! decodebin ! glupload ! tee name=t
+                #"""
+                #PIPELINE += '  t. ! queue ! glfilterbin filter="glcropbox zoom-factor={zoom_factor}" name=glbox'.format(zoom_factor=zoom_factor)
+                #PIPELINE += """ ! {sink_caps} ! {sink_element}
+                #"""
+                #PIPELINE += '  t. ! queue ! glfilterbin filter="glcropbox zoom-factor={zoom_factor}" name=glbox1'.format(zoom_factor=zoom_factor)
+                #PIPELINE += ' ! video/x-raw,format=RGB,width={w},height={h} ! glsvgoverlaysink name=overlaysink'.format(w=src_size[0], h=src_size[1])
 
                 # Method 2 - use videocrop plugin
-                #additional_crop = 45 # works as zoom factor
-                #crop_w = (src_size[0] - src_size[1]) // 2 + additional_crop
-                #crop_h = additional_crop
-                #src_size = (src_size[1] - additional_crop * 2, src_size[1] - additional_crop * 2)
-                #PIPELINE += '! videocrop top={crop_vert} left={crop_horiz} right={crop_horiz} bottom={crop_vert}'.format(crop_horiz=crop_w, crop_vert=crop_h)
-                #PIPELINE += """ ! decodebin ! glupload ! tee name=t
-                #  t. ! queue ! glfilterbin filter=glbox name=glbox ! {sink_caps} ! {sink_element}
-                #  t. ! queue ! glsvgoverlaysink name=overlaysink
-                #"""
+                additional_crop = 45 # works as zoom factor
+                crop_w = (src_size[0] - src_size[1]) // 2 + additional_crop
+                crop_h = additional_crop
+                src_size = (src_size[1] - additional_crop * 2, src_size[1] - additional_crop * 2)
+                PIPELINE += '! videocrop top={crop_vert} left={crop_horiz} right={crop_horiz} bottom={crop_vert}'.format(crop_horiz=crop_w, crop_vert=crop_h)
+                PIPELINE += """ ! decodebin ! glupload ! tee name=t
+                  t. ! queue ! glfilterbin filter=glbox name=glbox ! {sink_caps} ! {sink_element}
+                  t. ! queue ! glfilterbin filter=glbox name=glbox1 ! video/x-raw,format=RGB,width=224,height=224 ! appsink name=appsink1 emit-signals=true max-buffers=1 drop=true
+                  t. ! queue ! glsvgoverlaysink name=overlaysink
+                """
 
             else:
                 PIPELINE += """ ! decodebin ! glupload ! tee name=t

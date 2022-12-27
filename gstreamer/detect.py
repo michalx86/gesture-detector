@@ -171,14 +171,25 @@ def main():
       nonlocal tracked_obj
       nonlocal key_emtr
       start_time = time.monotonic()
+      print("inference_box: {}".format(inference_box))
+      if (inference_box[2]==224) :
+        #set_input(interpreter_classifier, classifier_img)
+        #interpreter_classifier.invoke()
+        run_inference(interpreter_classifier, input_tensor)
+        candidates = classify.get_classes(interpreter_classifier, 5, score_threshold=0.1)
+        print("Classifier candidates len: {}".format(len(candidates)))
+        for candidate in candidates:
+          print("Candidate {}".format(candidate.id))
+            #candidates[0].id))
+        return
+      
+      if (inference_box[0] != 320) :
+        return
+
       run_inference(interpreter, input_tensor)
       # For larger input image sizes, use the edgetpu.classification.engine for better performance
       objs = get_objects(interpreter, args.threshold)[:args.top_k]
 
-      #set_input(interpreter_classifier, classifier_img)
-      #interpreter_classifier.invoke()
-      #candidates = classify.get_classes(interpreter_classifier, 5, score_threshold=0.1)
-      #print("Classifier candidates lent: {}, id: {}".format(len(candidates), candidates[0].id))
 
 
       end_time = time.monotonic()
