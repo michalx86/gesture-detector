@@ -23,15 +23,65 @@ from gi.repository import GLib, GObject, Gst, GstBase, Gtk
 
 Gst.init(None)
 
+class GstSink:
+    def __init__(self, parent, sink_name, box_name):
+        self.parent =  parent
+        self.box_name = box_name
+        self.gstsample = None
+        self.sink_size = None
+        self.box = None
+
+        appsink = parent.pipeline.get_by_name(sink_name)
+        appsink.connect('new-preroll', self.on_new_sample, True)
+        appsink.connect('new-sample', self.on_new_sample, False)
+
+    def transfer_sample(self):
+        #print('transfer_sample: {}'.format(self.gstsample))
+        gstsample = self.gstsample
+        self.gstsample = None
+        return gstsample
+
+
+    def on_new_sample(self, sink, preroll):
+        #print('on_new_sample: {}'.format(self))
+        if self.gstsample is not None :
+            return Gst.FlowReturn.OK
+
+        sample = sink.emit('pull-preroll' if preroll else 'pull-sample')
+        #print('on_new_sample B: {}'.format(sample))
+        if not self.sink_size:
+            s = sample.get_caps().get_structure(0)
+            self.sink_size = (s.get_value('width'), s.get_value('height'))
+        with self.parent.condition:
+            self.gstsample = sample
+            self.parent.condition.notify_all()
+            #print('on_new_sample E: {}'.format(self.gstsample))
+        return Gst.FlowReturn.OK
+
+    def get_box(self):
+        if not self.box:
+            glbox = self.parent.pipeline.get_by_name(self.box_name)
+            if glbox:
+                glbox = glbox.get_by_name('filter')
+            box = self.parent.pipeline.get_by_name('box')
+            assert glbox or box
+            assert self.sink_size
+            if glbox:
+                self.box = (glbox.get_property('x'), glbox.get_property('y'),
+                        glbox.get_property('width'), glbox.get_property('height'))
+            else:
+                self.box = (-box.get_property('left'), -box.get_property('top'),
+                    self.sink_size[0] + box.get_property('left') + box.get_property('right'),
+                    self.sink_size[1] + box.get_property('top') + box.get_property('bottom'))
+        return self.box
+
+
+
 class GstPipeline:
     def __init__(self, pipeline, user_function, src_size):
         self.user_function = user_function
         self.running = False
-        self.gstsample = None
-        self.sink_size = None
-        self.sink_num = 0
         self.src_size = src_size
-        self.box = None
         self.condition = threading.Condition()
 
         self.pipeline = Gst.parse_launch(pipeline)
@@ -39,13 +89,7 @@ class GstPipeline:
         self.gloverlay = self.pipeline.get_by_name('gloverlay')
         self.overlaysink = self.pipeline.get_by_name('overlaysink')
 
-        #appsink = self.pipeline.get_by_name('appsink')
-        #appsink.connect('new-preroll', self.on_new_sample0, True)
-        #appsink.connect('new-sample', self.on_new_sample0, False)
-
-        appsink1 = self.pipeline.get_by_name('appsink1')
-        appsink1.connect('new-preroll', self.on_new_sample1, True)
-        appsink1.connect('new-sample', self.on_new_sample1, False)
+        self.sinks = [GstSink(self, 'appsink', 'glbox'), GstSink(self, 'appsink1', 'glbox1')]
 
         # Set up a pipeline bus watch to catch errors.
         bus = self.pipeline.get_bus()
@@ -90,66 +134,33 @@ class GstPipeline:
             Gtk.main_quit()
         return True
 
-    def on_new_sample0(self, sink, preroll):
-        self.sink_num = 0
-        #return self.on_new_sample(sink, preroll)
-        return Gst.FlowReturn.OK
-
-    def on_new_sample1(self, sink, preroll):
-        self.sink_num = 1
-        return self.on_new_sample(sink, preroll)
-
-    def on_new_sample(self, sink, preroll):
-        sample = sink.emit('pull-preroll' if preroll else 'pull-sample')
-        if not self.sink_size:
-            s = sample.get_caps().get_structure(0)
-            self.sink_size = (s.get_value('width'), s.get_value('height'))
-        with self.condition:
-            self.gstsample = sample
-            self.condition.notify_all()
-        return Gst.FlowReturn.OK
-
-    def get_box(self):
-        if not self.box:
-            glbox = self.pipeline.get_by_name('glbox')
-            if glbox:
-                glbox = glbox.get_by_name('filter')
-            box = self.pipeline.get_by_name('box')
-            assert glbox or box
-            assert self.sink_size
-            if glbox:
-                self.box = (glbox.get_property('x'), glbox.get_property('y'),
-                        glbox.get_property('width'), glbox.get_property('height'))
-            else:
-                self.box = (-box.get_property('left'), -box.get_property('top'),
-                    self.sink_size[0] + box.get_property('left') + box.get_property('right'),
-                    self.sink_size[1] + box.get_property('top') + box.get_property('bottom'))
-            return self.box
-
     def inference_loop(self):
         while True:
             with self.condition:
-                while not self.gstsample and self.running:
+                while not self.sinks[0].gstsample and not self.sinks[1].gstsample and self.running:
                     self.condition.wait()
                 if not self.running:
                     break
-                gstsample = self.gstsample
-                self.gstsample = None
 
-            # Passing Gst.Buffer as input tensor avoids 2 copies of it.
-            gstbuffer = gstsample.get_buffer()
-            if (self.sink_num == 0) :
-                svg = self.user_function(gstbuffer, self.src_size, self.get_box())
-            else : 
-                svg = self.user_function(gstbuffer, self.src_size, (0,0,224,224))
-            #svg = self.user_function(gstbuffer, self.src_size, self.get_box())
-            if svg:
-                if self.overlay:
-                    self.overlay.set_property('data', svg)
-                if self.gloverlay:
-                    self.gloverlay.emit('set-svg', svg, gstbuffer.pts)
-                if self.overlaysink:
-                    self.overlaysink.set_property('svg', svg)
+            for sink_num, sink in enumerate(self.sinks) :
+                gstsample = sink.transfer_sample()
+                if gstsample is None :
+                    continue
+
+                #print("Loop BEGIN {} {}".format(sink_num, sink))
+                #print("   sample BEGIN: {}".format(gstsample))
+                # Passing Gst.Buffer as input tensor avoids 2 copies of it.
+                gstbuffer = gstsample.get_buffer()
+                svg = self.user_function(gstbuffer, self.src_size, sink.get_box())
+                #print("Loop END   {} {}".format(sink_num, sink))
+                #print("   sample END: {}".format(sink.gstsample))
+                if svg:
+                    if self.overlay:
+                        self.overlay.set_property('data', svg)
+                    if self.gloverlay:
+                        self.gloverlay.emit('set-svg', svg, gstbuffer.pts)
+                    if self.overlaysink:
+                        self.overlaysink.set_property('svg', svg)
 
     def setup_window(self):
         # Only set up our own window if we have Coral overlay sink in the pipeline.

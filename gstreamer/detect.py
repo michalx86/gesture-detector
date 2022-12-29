@@ -183,8 +183,6 @@ def main():
             #candidates[0].id))
         return
       
-      if (inference_box[0] != 320) :
-        return
 
       run_inference(interpreter, input_tensor)
       # For larger input image sizes, use the edgetpu.classification.engine for better performance
