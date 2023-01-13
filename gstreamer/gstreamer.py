@@ -62,10 +62,9 @@ class GstSink:
     def get_box(self):
         if not self.box:
             glbox = self.parent.pipeline.get_by_name(self.box_name)
-            print("glbox1: {}".format(glbox))
             if glbox:
                 glbox = glbox.get_by_name('filter')
-                print("glbox2: {}".format(glbox))
+                #print("glbox2: {}".format(glbox))
                 self.glbox=glbox
             box = self.parent.pipeline.get_by_name('box')
             assert glbox or box
@@ -82,8 +81,9 @@ class GstSink:
 
 
 class GstPipeline:
-    def __init__(self, pipeline, user_function, src_size):
+    def __init__(self, pipeline, user_function, user_classifier_function, src_size):
         self.user_function = user_function
+        self.user_classifier_function = user_classifier_function
         self.running = False
         self.src_size = src_size
         self.condition = threading.Condition()
@@ -151,27 +151,26 @@ class GstPipeline:
                 if gstsample is None :
                     continue
 
-                #print("Loop BEGIN {} {}".format(sink_num, sink))
-                #print("   sample BEGIN: {}".format(gstsample))
                 # Passing Gst.Buffer as input tensor avoids 2 copies of it.
                 gstbuffer = gstsample.get_buffer()
-                svg, face_coords = self.user_function(gstbuffer, self.src_size, sink.get_box())
-                if self.sinks[0] == sink and self.sinks[1].glbox is not None:
-                    #print("sink.glbox: {}".format(sink.glbox))
-                    print("Face coords: {}".format(face_coords))
-                    self.sinks[1].glbox.set_property("crop-x", face_coords[0])
-                    self.sinks[1].glbox.set_property("crop-y", face_coords[1])
-                    self.sinks[1].glbox.set_property("crop-len", face_coords[2])
+                if self.sinks[0] == sink:
+                    svg, face_coords = self.user_function(gstbuffer, self.src_size, sink.get_box())
+                    if self.sinks[1].glbox is not None:
+                        #print("Face coords: {}".format(face_coords))
+                        self.sinks[1].glbox.set_property("crop-x", face_coords[0])
+                        self.sinks[1].glbox.set_property("crop-y", face_coords[1])
+                        self.sinks[1].glbox.set_property("crop-len", face_coords[2])
 
-                #print("Loop END   {} {}".format(sink_num, sink))
-                #print("   sample END: {}".format(sink.gstsample))
-                if svg:
-                    if self.overlay:
-                        self.overlay.set_property('data', svg)
-                    if self.gloverlay:
-                        self.gloverlay.emit('set-svg', svg, gstbuffer.pts)
-                    if self.overlaysink:
-                        self.overlaysink.set_property('svg', svg)
+                    if svg:
+                        if self.overlay:
+                            self.overlay.set_property('data', svg)
+                        if self.gloverlay:
+                            self.gloverlay.emit('set-svg', svg, gstbuffer.pts)
+                        if self.overlaysink:
+                            self.overlaysink.set_property('svg', svg)
+                else:
+                    sink.get_box()
+                    self.user_classifier_function(gstbuffer)
 
     def setup_window(self):
         # Only set up our own window if we have Coral overlay sink in the pipeline.
@@ -243,6 +242,7 @@ def get_dev_board_model():
   return None
 
 def run_pipeline(user_function,
+                 user_classifier_function,
                  src_size,
                  appsink_size,
                  videosrc='/dev/video1',
@@ -353,5 +353,5 @@ def run_pipeline(user_function,
 
     print('Gstreamer pipeline:\n', pipeline)
 
-    pipeline = GstPipeline(pipeline, user_function, src_size)
+    pipeline = GstPipeline(pipeline, user_function, user_classifier_function, src_size)
     pipeline.run()

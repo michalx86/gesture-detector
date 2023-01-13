@@ -156,10 +156,6 @@ def main():
     interpreter_classifier = make_interpreter('/home/mendel/edgetpu/retrain-imprinting/retrained_imprinting_model.tflite')
     interpreter_classifier.allocate_tensors()
     classifier_size = input_size(interpreter_classifier)
-    #classifier_img = Image.open(os.path.join('/home/mendel/edgetpu/retrain-imprinting/FamFaces', 'Michal', 'FaceMichal_00.jpg')).resize(classifier_size, Image.NEAREST)
-    #classifier_img = Image.open(os.path.join('/home/mendel/edgetpu/retrain-imprinting/FamFaces', 'Kuba', 'FaceKuba_07.jpg')).resize(classifier_size, Image.NEAREST)
-    classifier_img = Image.open(os.path.join('/home/mendel/edgetpu/retrain-imprinting/FamFaces', 'Lidia', 'FaceLidia_01.jpg')).resize(classifier_size, Image.NEAREST)
-
 
     # Average fps over last 30 frames.
     fps_counter = avg_fps_counter(30)
@@ -171,29 +167,15 @@ def main():
       nonlocal tracked_obj
       nonlocal key_emtr
       start_time = time.monotonic()
-      print("inference_box: {}".format(inference_box))
-      if (inference_box[2]==224) :
-        #set_input(interpreter_classifier, classifier_img)
-        #interpreter_classifier.invoke()
-        run_inference(interpreter_classifier, input_tensor)
-        candidates = classify.get_classes(interpreter_classifier, 5, score_threshold=0.1)
-        print("Classifier candidates len: {}".format(len(candidates)))
-        for candidate in candidates:
-          print("Candidate {}".format(candidate.id))
-            #candidates[0].id))
-        return None, (0.0, 0.0, 0.0)
-      
 
       run_inference(interpreter, input_tensor)
       # For larger input image sizes, use the edgetpu.classification.engine for better performance
       objs = get_objects(interpreter, args.threshold)[:args.top_k]
 
-
-
       end_time = time.monotonic()
 
       face_objs = list(filter( lambda obj: obj.score > 0.3 and obj.id == 10, objs))
-      face_coords = 0.0, 0.0, 1.0
+      face_coords = 0.0, 0.0, 0.01
       if face_objs:
           #print('Face: {}'.format(face_objs[0]))
           x1, y1, x2, y2 = face_objs[0].bbox
@@ -211,13 +193,11 @@ def main():
           y = y1 / inference_box_size
           l = l / inference_box_size
           face_coords = x,y,l
-          print(face_coords)
 
       filtered_objs = list(filter( lambda obj: obj.score > 0.5 and obj.id <= RawCode.GEST_PAUSE.value, objs))
       tracked_obj = object_tracker.track(tracked_obj, filtered_objs)
 
       tracked_obj_id    = tracked_obj.id    if tracked_obj is not None else -1
-      #tracked_obj_score = tracked_obj.score if tracked_obj is not None else 0
   
       key,event,fill = key_emtr.push_input(tracked_obj_id, end_time)
       if tracked_obj is not None:
@@ -239,11 +219,20 @@ def main():
           #'Score: {}'.format(tracked_obj_score),
       ]
       #print(' '.join(text_lines))
-      print(face_coords)
 
       return generate_svg(src_size, inference_box, objs, labels, label_colors, text_lines, tracked_obj), face_coords
 
+    def user_classifier_callback(input_tensor):
+      #set_input(interpreter_classifier, classifier_img)
+      #interpreter_classifier.invoke()
+      run_inference(interpreter_classifier, input_tensor)
+      candidates = classify.get_classes(interpreter_classifier, 5, score_threshold=0.95)
+      for candidate in candidates:
+        print("Candidate {}".format(candidate))
+      return
+
     result = gstreamer.run_pipeline(user_callback,
+                                    user_classifier_callback,
                                     src_size=(640, 480), # (640,480) or (800, 600) or (1280,720)
                                     appsink_size=inference_size,
                                     videosrc=args.videosrc,
