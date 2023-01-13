@@ -30,6 +30,7 @@ class GstSink:
         self.gstsample = None
         self.sink_size = None
         self.box = None
+        self.glbox = None
 
         appsink = parent.pipeline.get_by_name(sink_name)
         appsink.connect('new-preroll', self.on_new_sample, True)
@@ -61,8 +62,11 @@ class GstSink:
     def get_box(self):
         if not self.box:
             glbox = self.parent.pipeline.get_by_name(self.box_name)
+            print("glbox1: {}".format(glbox))
             if glbox:
                 glbox = glbox.get_by_name('filter')
+                print("glbox2: {}".format(glbox))
+                self.glbox=glbox
             box = self.parent.pipeline.get_by_name('box')
             assert glbox or box
             assert self.sink_size
@@ -152,6 +156,9 @@ class GstPipeline:
                 # Passing Gst.Buffer as input tensor avoids 2 copies of it.
                 gstbuffer = gstsample.get_buffer()
                 svg = self.user_function(gstbuffer, self.src_size, sink.get_box())
+                #if self.sinks[1] == sink:
+                #    print("sink.glbox: {}".format(sink.glbox))
+                #    sink.glbox.set_property("zoom-factor", 2.0)
                 #print("Loop END   {} {}".format(sink_num, sink))
                 #print("   sample END: {}".format(sink.gstsample))
                 if svg:
@@ -291,26 +298,27 @@ def run_pipeline(user_function,
                 # Make video input square to utilize Neural Network input fully (NN inputs are sqare - see inference_box)
 
                 # Method 1 - use custom plugin - glcropbox
-                #src_size = (src_size[1], src_size[1])
-                #PIPELINE += """ ! decodebin ! glupload ! tee name=t
-                #"""
-                #PIPELINE += '  t. ! queue ! glfilterbin filter="glcropbox zoom-factor={zoom_factor}" name=glbox'.format(zoom_factor=zoom_factor)
-                #PIPELINE += """ ! {sink_caps} ! {sink_element}
-                #"""
-                #PIPELINE += '  t. ! queue ! glfilterbin filter="glcropbox zoom-factor={zoom_factor}" name=glbox1'.format(zoom_factor=zoom_factor)
-                #PIPELINE += ' ! video/x-raw,format=RGB,width={w},height={h} ! glsvgoverlaysink name=overlaysink'.format(w=src_size[0], h=src_size[1])
+                src_size = (src_size[1], src_size[1])
+                PIPELINE += """ ! decodebin ! glupload ! tee name=t
+                """
+                PIPELINE += '  t. ! queue ! glfilterbin filter="glcropbox zoom-factor={zoom_factor}" name=glbox'.format(zoom_factor=zoom_factor)
+                PIPELINE += """ ! {sink_caps} ! {sink_element}
+                """
+                PIPELINE += '  t. ! queue ! glfilterbin filter="glcropbox zoom-factor=1.0" name=glbox1 ! video/x-raw,format=RGB,width=224,height=224 ! appsink name=appsink1 emit-signals=true max-buffers=1 drop=true'
+                PIPELINE += '  t. ! queue ! glfilterbin filter="glcropbox zoom-factor={zoom_factor}" name=glbox2'.format(zoom_factor=zoom_factor)
+                PIPELINE += ' ! video/x-raw,format=RGB,width={w},height={h} ! glsvgoverlaysink name=overlaysink'.format(w=src_size[0], h=src_size[1])
 
                 # Method 2 - use videocrop plugin
-                additional_crop = 45 # works as zoom factor
-                crop_w = (src_size[0] - src_size[1]) // 2 + additional_crop
-                crop_h = additional_crop
-                src_size = (src_size[1] - additional_crop * 2, src_size[1] - additional_crop * 2)
-                PIPELINE += '! videocrop top={crop_vert} left={crop_horiz} right={crop_horiz} bottom={crop_vert}'.format(crop_horiz=crop_w, crop_vert=crop_h)
-                PIPELINE += """ ! decodebin ! glupload ! tee name=t
-                  t. ! queue ! glfilterbin filter=glbox name=glbox ! {sink_caps} ! {sink_element}
-                  t. ! queue ! glfilterbin filter=glbox name=glbox1 ! video/x-raw,format=RGB,width=224,height=224 ! appsink name=appsink1 emit-signals=true max-buffers=1 drop=true
-                  t. ! queue ! glsvgoverlaysink name=overlaysink
-                """
+                #additional_crop = 45 # works as zoom factor
+                #crop_w = (src_size[0] - src_size[1]) // 2 + additional_crop
+                #crop_h = additional_crop
+                #src_size = (src_size[1] - additional_crop * 2, src_size[1] - additional_crop * 2)
+                #PIPELINE += '! videocrop top={crop_vert} left={crop_horiz} right={crop_horiz} bottom={crop_vert}'.format(crop_horiz=crop_w, crop_vert=crop_h)
+                #PIPELINE += """ ! decodebin ! glupload ! tee name=t
+                #  t. ! queue ! glfilterbin filter=glcropbox name=glbox ! {sink_caps} ! {sink_element}
+                #  t. ! queue ! glfilterbin filter="glcropbox zoom-factor=1.0" name=glbox1 ! video/x-raw,format=RGB,width=224,height=224 ! appsink name=appsink1 emit-signals=true max-buffers=1 drop=true
+                #  t. ! queue ! glsvgoverlaysink name=overlaysink
+                #"""
 
             else:
                 PIPELINE += """ ! decodebin ! glupload ! tee name=t

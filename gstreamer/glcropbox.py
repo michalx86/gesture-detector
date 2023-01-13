@@ -15,6 +15,7 @@
 import numpy
 import os
 import time
+import traceback
 
 import gi
 gi.require_version('GLib', '2.0')
@@ -40,18 +41,36 @@ SINK_CAPS = Gst.Caps.from_string(SINK_CAPS.format(max_int=GLib.MAXINT))
 SRC_CAPS = 'video/x-raw(memory:GLMemory),format=RGBA,width=[1,{max_int}],height=[1,{max_int}],texture-target=2D'
 SRC_CAPS = Gst.Caps.from_string(SRC_CAPS.format(max_int=GLib.MAXINT))
 
+#VERTEX_SHADER = '''
+#attribute vec4 a_position;
+#attribute vec2 a_texcoord;
+#varying vec2 v_texcoord;
+#uniform float u_scale_x;
+#uniform float u_scale_y;
+#void main()
+#{
+#  v_texcoord = a_texcoord;
+#  gl_Position = vec4(a_position.x * u_scale_x, a_position.y * u_scale_y, a_position.zw);
+#}
+#'''
+
 VERTEX_SHADER = '''
 attribute vec4 a_position;
 attribute vec2 a_texcoord;
 varying vec2 v_texcoord;
 uniform float u_scale_x;
 uniform float u_scale_y;
+uniform float u_tex_start_x;
+uniform float u_tex_start_y;
+uniform float u_tex_scale;
 void main()
 {
-  v_texcoord = a_texcoord;
+  //v_texcoord = a_texcoord;
+  v_texcoord = vec2(1.0 - (u_tex_start_x + a_texcoord.x * u_tex_scale), u_tex_start_y + a_texcoord.y * u_tex_scale);
   gl_Position = vec4(a_position.x * u_scale_x, a_position.y * u_scale_y, a_position.zw);
 }
 '''
+#  v_texcoord = vec2(1.0 - a_texcoord.x * 0.5, 0.5 + a_texcoord.y * 0.5);
 
 POSITIONS = numpy.array([
         -1.0, -1.0,
@@ -75,7 +94,7 @@ TEXCOORDS = numpy.array([
 #    ], dtype=numpy.float32)
 
 #TEXCOORDS = numpy.array([
-#         0.40, 0.40,
+#         0.40, 0.40,   
 #         0.60, 0.40,
 #         0.60, 0.60,
 #         0.40, 0.60,
@@ -166,6 +185,7 @@ class GlBox(GstGL.GLFilter):
         self.frames = 0
 
     def do_set_property(self, prop, value):
+        traceback.print_stack()
         if prop.name == 'zoom-factor':
             self.zoom_factor = value
         else:
@@ -198,6 +218,7 @@ class GlBox(GstGL.GLFilter):
 
 
     def do_gl_start(self):
+        traceback.print_stack()
         frag_stage = GstGL.GLSLStage.new_default_fragment(self.context)
         vert_stage = GstGL.GLSLStage.new_with_string(self.context,
             GL_VERTEX_SHADER,
@@ -254,6 +275,7 @@ class GlBox(GstGL.GLFilter):
         self.vbo_indices_buffer = None
 
     def do_gst_gl_filter_set_caps(self, in_caps, out_caps):
+        traceback.print_stack()
         in_info = GstVideo.VideoInfo()
         in_info.from_caps(in_caps)
 
@@ -304,7 +326,9 @@ class GlBox(GstGL.GLFilter):
         self.w = out_info.width
         self.h = out_info.height
         self.scale_x = w / out_info.width * self.zoom_factor
+        #self.scale_x = 1.0
         self.scale_y = h / out_info.height * self.zoom_factor
+        #self.scale_y = 0.75
         print("glcropbox - x: {}, y: {}, w: {}, h: {}, scale_x: {}, scale_y: {}".format(self.x, self.y, self.w, self.h, self.scale_x, self.scale_y))
 
         return True
@@ -334,6 +358,9 @@ class GlBox(GstGL.GLFilter):
         self.shader.use()
         self.shader.set_uniform_1f('u_scale_x', self.scale_x)
         self.shader.set_uniform_1f('u_scale_y', self.scale_y)
+        self.shader.set_uniform_1f('u_tex_start_x', 0.5)
+        self.shader.set_uniform_1f('u_tex_start_y', 0.5)
+        self.shader.set_uniform_1f('u_tex_scale', 0.25)
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, None)
 
 __gstelementfactory__ = ("glcropbox", Gst.Rank.NONE, GlBox)
