@@ -155,10 +155,14 @@ class GstPipeline:
                 #print("   sample BEGIN: {}".format(gstsample))
                 # Passing Gst.Buffer as input tensor avoids 2 copies of it.
                 gstbuffer = gstsample.get_buffer()
-                svg = self.user_function(gstbuffer, self.src_size, sink.get_box())
-                #if self.sinks[1] == sink:
-                #    print("sink.glbox: {}".format(sink.glbox))
-                #    sink.glbox.set_property("zoom-factor", 2.0)
+                svg, face_coords = self.user_function(gstbuffer, self.src_size, sink.get_box())
+                if self.sinks[0] == sink and self.sinks[1].glbox is not None:
+                    #print("sink.glbox: {}".format(sink.glbox))
+                    print("Face coords: {}".format(face_coords))
+                    self.sinks[1].glbox.set_property("crop-x", face_coords[0])
+                    self.sinks[1].glbox.set_property("crop-y", face_coords[1])
+                    self.sinks[1].glbox.set_property("crop-len", face_coords[2])
+
                 #print("Loop END   {} {}".format(sink_num, sink))
                 #print("   sample END: {}".format(sink.gstsample))
                 if svg:

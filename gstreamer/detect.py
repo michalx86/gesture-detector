@@ -181,7 +181,7 @@ def main():
         for candidate in candidates:
           print("Candidate {}".format(candidate.id))
             #candidates[0].id))
-        return
+        return None, (0.0, 0.0, 0.0)
       
 
       run_inference(interpreter, input_tensor)
@@ -191,6 +191,27 @@ def main():
 
 
       end_time = time.monotonic()
+
+      face_objs = list(filter( lambda obj: obj.score > 0.3 and obj.id == 10, objs))
+      face_coords = 0.0, 0.0, 1.0
+      if face_objs:
+          #print('Face: {}'.format(face_objs[0]))
+          x1, y1, x2, y2 = face_objs[0].bbox
+          w = x2 - x1
+          h = y2 - y1
+          if w > h:
+              l = w
+              y1 = y1 - (l - h) // 2
+          else:
+              l = h
+              x1 = x1 - (l - w) // 2
+
+          inference_box_size = inference_box[2]
+          x = x1 / inference_box_size
+          y = y1 / inference_box_size
+          l = l / inference_box_size
+          face_coords = x,y,l
+          print(face_coords)
 
       filtered_objs = list(filter( lambda obj: obj.score > 0.5 and obj.id <= RawCode.GEST_PAUSE.value, objs))
       tracked_obj = object_tracker.track(tracked_obj, filtered_objs)
@@ -218,8 +239,9 @@ def main():
           #'Score: {}'.format(tracked_obj_score),
       ]
       #print(' '.join(text_lines))
+      print(face_coords)
 
-      return generate_svg(src_size, inference_box, objs, labels, label_colors, text_lines, tracked_obj)
+      return generate_svg(src_size, inference_box, objs, labels, label_colors, text_lines, tracked_obj), face_coords
 
     result = gstreamer.run_pipeline(user_callback,
                                     src_size=(640, 480), # (640,480) or (800, 600) or (1280,720)

@@ -60,13 +60,13 @@ attribute vec2 a_texcoord;
 varying vec2 v_texcoord;
 uniform float u_scale_x;
 uniform float u_scale_y;
-uniform float u_tex_start_x;
-uniform float u_tex_start_y;
-uniform float u_tex_scale;
+uniform float u_crop_x;
+uniform float u_crop_y;
+uniform float u_crop_len;
 void main()
 {
   //v_texcoord = a_texcoord;
-  v_texcoord = vec2(1.0 - (u_tex_start_x + a_texcoord.x * u_tex_scale), u_tex_start_y + a_texcoord.y * u_tex_scale);
+  v_texcoord = vec2(1.0 - (u_crop_x + a_texcoord.x * u_crop_len), u_crop_y + a_texcoord.y * u_crop_len);
   gl_Position = vec4(a_position.x * u_scale_x, a_position.y * u_scale_y, a_position.zw);
 }
 '''
@@ -167,6 +167,27 @@ class GlBox(GstGL.GLFilter):
                 GLib.MAXFLOAT,
                 0,
                 GObject.ParamFlags.READWRITE),
+        'crop-x': (float,
+                'Crop X coordinate expressed in percent. Assumes input image is square.',
+                'Crop X coordinate expressed in percent. Assumes input image is square.',
+                0,
+                GLib.MAXFLOAT,
+                0,
+                GObject.ParamFlags.READWRITE),
+        'crop-y': (float,
+                'Crop Y coordinate expressed in percent. Assumes input image is square.',
+                'Crop Y coordinate expressed in percent. Assumes input image is square.',
+                0,
+                GLib.MAXFLOAT,
+                0,
+                GObject.ParamFlags.READWRITE),
+        'crop-len': (float,
+                'Crop length expressed in percent. Assumes input image is square.',
+                'Crop length expressed in percent. Assumes input image is square.',
+                0,
+                GLib.MAXFLOAT,
+                0,
+                GObject.ParamFlags.READWRITE),
     }
 
     def __init__(self):
@@ -174,6 +195,9 @@ class GlBox(GstGL.GLFilter):
         self.x, self.y, self.w, self.h = 0, 0, 0, 0
         self.scale_x, self.scale_y = 1.0, 1.0
         self.zoom_factor = 1.0
+        self.crop_x = 0.0
+        self.crop_y = 0.0
+        self.crop_len = 1.0
 
         self.shader = None
         self.vao_id = 0
@@ -185,9 +209,15 @@ class GlBox(GstGL.GLFilter):
         self.frames = 0
 
     def do_set_property(self, prop, value):
-        traceback.print_stack()
+        #traceback.print_stack()
         if prop.name == 'zoom-factor':
             self.zoom_factor = value
+        elif prop.name == 'crop-x':
+            self.crop_x = value
+        elif prop.name == 'crop-y':
+            self.crop_y = value
+        elif prop.name == 'crop-len':
+            self.crop_len = value
         else:
             raise AttributeError('unknown property %s' % prop.name)
 
@@ -206,6 +236,12 @@ class GlBox(GstGL.GLFilter):
             return self.scale_y
         elif prop.name == 'zoom-factor':
             return self.zoom_factor
+        elif prop.name == 'crop-x':
+            return self.crop_x
+        elif prop.name == 'crop-y':
+            return self.crop_y
+        elif prop.name == 'crop-len':
+            return self.crop_len
         else:
             raise AttributeError('Unknown property %s' % prop.name)
 
@@ -218,7 +254,7 @@ class GlBox(GstGL.GLFilter):
 
 
     def do_gl_start(self):
-        traceback.print_stack()
+        #traceback.print_stack()
         frag_stage = GstGL.GLSLStage.new_default_fragment(self.context)
         vert_stage = GstGL.GLSLStage.new_with_string(self.context,
             GL_VERTEX_SHADER,
@@ -275,7 +311,7 @@ class GlBox(GstGL.GLFilter):
         self.vbo_indices_buffer = None
 
     def do_gst_gl_filter_set_caps(self, in_caps, out_caps):
-        traceback.print_stack()
+        #traceback.print_stack()
         in_info = GstVideo.VideoInfo()
         in_info.from_caps(in_caps)
 
@@ -358,9 +394,9 @@ class GlBox(GstGL.GLFilter):
         self.shader.use()
         self.shader.set_uniform_1f('u_scale_x', self.scale_x)
         self.shader.set_uniform_1f('u_scale_y', self.scale_y)
-        self.shader.set_uniform_1f('u_tex_start_x', 0.5)
-        self.shader.set_uniform_1f('u_tex_start_y', 0.5)
-        self.shader.set_uniform_1f('u_tex_scale', 0.25)
+        self.shader.set_uniform_1f('u_crop_x', self.crop_x)
+        self.shader.set_uniform_1f('u_crop_y', self.crop_y)
+        self.shader.set_uniform_1f('u_crop_len',   self.crop_len)
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, None)
 
 __gstelementfactory__ = ("glcropbox", Gst.Rank.NONE, GlBox)
