@@ -85,7 +85,8 @@ def calc_coord(bbox, box_x, box_y, scale_x, scale_y):
     # Scale to source coordinate space.
     return x * scale_x, y * scale_y, w * scale_x, h * scale_y
 
-def generate_svg(src_size, inference_box, objs, labels, label_colors, text_lines, tracked_obj):
+def generate_svg(src_size, inference_box, objs, labels, label_colors, text_lines, tracked_obj, face_obj, face_label):
+
     svg = SVG(src_size)
     src_w, src_h = src_size
     box_x, box_y, box_w, box_h = inference_box
@@ -101,6 +102,8 @@ def generate_svg(src_size, inference_box, objs, labels, label_colors, text_lines
         percent = int(100 * obj.score)
         label = '{}% {}'.format(percent, labels.get(obj.id, obj.id))
         svg.add_text(x, y - 5, label, 20)
+        if obj == face_obj and face_label is not None:
+            svg.add_text(x,y - 25, "Hi "+ face_label + "!", 20)
         svg.add_rect(x, y, w, h, label_colors(obj.id), LINE_WIDTH, obj.score)
 
     if tracked_obj is not None:
@@ -154,8 +157,10 @@ def main():
     label_colors = make_label_colors(labels)
 
     interpreter_classifier = make_interpreter('/home/mendel/edgetpu/retrain-imprinting/retrained_imprinting_model.tflite')
+    face_labels = read_label_file('/home/mendel/edgetpu/retrain-imprinting/retrained_imprinting_model.txt')
     interpreter_classifier.allocate_tensors()
     classifier_size = input_size(interpreter_classifier)
+    face_label = None
 
     # Average fps over last 30 frames.
     fps_counter = avg_fps_counter(30)
@@ -166,6 +171,7 @@ def main():
       nonlocal fps_counter
       nonlocal tracked_obj
       nonlocal key_emtr
+      nonlocal face_label
       start_time = time.monotonic()
 
       run_inference(interpreter, input_tensor)
@@ -174,9 +180,11 @@ def main():
 
       end_time = time.monotonic()
 
+      face_obj = None
       face_objs = list(filter( lambda obj: obj.score > 0.3 and obj.id == 10, objs))
       face_coords = 0.0, 0.0, 0.01
       if face_objs:
+          face_obj = face_objs[0]
           #print('Face: {}'.format(face_objs[0]))
           x1, y1, x2, y2 = face_objs[0].bbox
           w = x2 - x1
@@ -193,6 +201,7 @@ def main():
           y = y1 / inference_box_size
           l = l / inference_box_size
           face_coords = x,y,l
+
 
       filtered_objs = list(filter( lambda obj: obj.score > 0.5 and obj.id <= RawCode.GEST_PAUSE.value, objs))
       tracked_obj = object_tracker.track(tracked_obj, filtered_objs)
@@ -220,15 +229,19 @@ def main():
       ]
       #print(' '.join(text_lines))
 
-      return generate_svg(src_size, inference_box, objs, labels, label_colors, text_lines, tracked_obj), face_coords
+      return generate_svg(src_size, inference_box, objs, labels, label_colors, text_lines, tracked_obj, face_obj, face_label), face_coords
 
     def user_classifier_callback(input_tensor):
+      nonlocal face_label
       #set_input(interpreter_classifier, classifier_img)
       #interpreter_classifier.invoke()
       run_inference(interpreter_classifier, input_tensor)
       candidates = classify.get_classes(interpreter_classifier, 5, score_threshold=0.95)
+      if candidates:
+          face_label = face_labels[0]
       for candidate in candidates:
-        print("Candidate {}".format(candidate))
+        #print("Candidate {}".format(candidate))
+        print("Candidate Name {}".format(face_labels[candidate.id]))
       return
 
     result = gstreamer.run_pipeline(user_callback,
