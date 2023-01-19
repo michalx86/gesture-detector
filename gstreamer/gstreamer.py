@@ -23,6 +23,13 @@ from gi.repository import GLib, GObject, Gst, GstBase, Gtk
 
 Gst.init(None)
 
+def set_face_coords(glbox, face_coords): 
+    if glbox is not None:
+        print("Face coords: {}".format(face_coords))
+        glbox.set_property("crop-x", face_coords[0])
+        glbox.set_property("crop-y", face_coords[1])
+        glbox.set_property("crop-len", face_coords[2])
+
 class GstSink:
     def __init__(self, parent, sink_name, box_name):
         self.parent =  parent
@@ -95,6 +102,10 @@ class GstPipeline:
 
         self.sinks = [GstSink(self, 'appsink', 'glbox'), GstSink(self, 'appsink1', 'glbox1')]
 
+        glbox = self.pipeline.get_by_name('glbox2')
+        if glbox:
+            self.glbox = glbox.get_by_name('filter')
+
         # Set up a pipeline bus watch to catch errors.
         bus = self.pipeline.get_bus()
         bus.add_signal_watch()
@@ -155,11 +166,11 @@ class GstPipeline:
                 gstbuffer = gstsample.get_buffer()
                 if self.sinks[0] == sink:
                     svg, face_coords = self.user_function(gstbuffer, self.src_size, sink.get_box())
-                    if self.sinks[1].glbox is not None:
-                        #print("Face coords: {}".format(face_coords))
-                        self.sinks[1].glbox.set_property("crop-x", face_coords[0])
-                        self.sinks[1].glbox.set_property("crop-y", face_coords[1])
-                        self.sinks[1].glbox.set_property("crop-len", face_coords[2])
+
+                    set_face_coords(self.sinks[1].glbox, face_coords)
+                    FACE_DEBUG_MODE = False
+                    if FACE_DEBUG_MODE:
+                        set_face_coords(self.glbox, face_coords)
 
                     if svg:
                         if self.overlay:
@@ -168,7 +179,7 @@ class GstPipeline:
                             self.gloverlay.emit('set-svg', svg, gstbuffer.pts)
                         if self.overlaysink:
                             self.overlaysink.set_property('svg', svg)
-                else:
+                elif self.sinks[1] == sink:
                     sink.get_box()
                     self.user_classifier_function(gstbuffer)
 
