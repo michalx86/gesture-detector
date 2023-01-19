@@ -190,11 +190,15 @@ def main():
           w = x2 - x1
           h = y2 - y1
           if w > h:
-              l = w
-              y1 = y1 - (l - h) // 2
-          else:
+              #l = w
+              #y1 = y1 - (l - h) // 2
               l = h
-              x1 = x1 - (l - w) // 2
+              x1 = x1 + (w - l) // 2
+          else:
+              #l = h
+              #x1 = x1 - (l - w) // 2
+              l = w
+              y1 = y1 + (h - l) // 2
 
           inference_box_size = inference_box[2]
           x = x1 / inference_box_size
@@ -236,11 +240,13 @@ def main():
       #set_input(interpreter_classifier, classifier_img)
       #interpreter_classifier.invoke()
       run_inference(interpreter_classifier, input_tensor)
-      candidates = classify.get_classes(interpreter_classifier, 5, score_threshold=0.95)
+      candidates = classify.get_classes(interpreter_classifier, 5, score_threshold=0.90)
       if candidates:
-          face_label = face_labels[0]
+          face_label = face_labels[candidates[0].id]
+      else:
+          face_label = ""
       for candidate in candidates:
-        #print("Candidate {}".format(candidate))
+        print("Candidate {}".format(candidate))
         print("Candidate Name {}".format(face_labels[candidate.id]))
       return
 
