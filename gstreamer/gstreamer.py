@@ -25,7 +25,7 @@ Gst.init(None)
 
 def set_face_coords(glbox, face_coords): 
     if glbox is not None:
-        print("Face coords: {}".format(face_coords))
+        #print("Face coords: {}".format(face_coords))
         glbox.set_property("crop-x", face_coords[0])
         glbox.set_property("crop-y", face_coords[1])
         glbox.set_property("crop-len", face_coords[2])

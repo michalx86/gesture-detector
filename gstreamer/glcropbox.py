@@ -65,12 +65,12 @@ uniform float u_crop_y;
 uniform float u_crop_len;
 void main()
 {
-  //v_texcoord = a_texcoord;
-  v_texcoord = vec2(1.0 - (u_crop_x + a_texcoord.x * u_crop_len), u_crop_y + a_texcoord.y * u_crop_len);
-  gl_Position = vec4(a_position.x * u_scale_x, a_position.y * u_scale_y, a_position.zw);
+  v_texcoord = vec2(1.0 - (0.125 + (u_crop_x + a_texcoord.x * u_crop_len) * 0.75), u_crop_y + a_texcoord.y * u_crop_len);
+  gl_Position = a_position;
 }
 '''
-#  v_texcoord = vec2(1.0 - a_texcoord.x * 0.5, 0.5 + a_texcoord.y * 0.5);
+#  v_texcoord = vec2(1.0 - (u_crop_x + a_texcoord.x * u_crop_len), u_crop_y + a_texcoord.y * u_crop_len);
+#  gl_Position = vec4(a_position.x * u_scale_x, a_position.y * u_scale_y, a_position.zw);
 
 POSITIONS = numpy.array([
         -1.0, -1.0,

@@ -198,7 +198,7 @@ def main():
               #l = h
               #x1 = x1 - (l - w) // 2
               l = w
-              y1 = y1 + (h - l) // 2
+              y1 = y1 + (h - l) // 1.25  # We want to get chin, but get rid of top of the head - hair, forehead
 
           inference_box_size = inference_box[2]
           x = x1 / inference_box_size
