@@ -14,6 +14,8 @@
 
 import sys
 import threading
+import numpy as np
+from PIL import Image
 
 import gi
 gi.require_version('Gst', '1.0')
@@ -181,6 +183,23 @@ class GstPipeline:
                             self.overlaysink.set_property('svg', svg)
                 elif self.sinks[1] == sink:
                     sink.get_box()
+
+                    # Get read access to the buffer data
+                    success, map_info = gstbuffer.map(Gst.MapFlags.READ)
+                    if not success:
+                        raise RuntimeError("Could not map buffer data!")
+
+                    numpy_frame = np.ndarray(
+                      shape=(224, 224, 3),
+                      dtype=np.uint8,
+                      buffer=map_info.data)
+
+                    img = Image.fromarray(numpy_frame)
+                    img.save("faces.png")
+
+                    # Clean up the buffer mapping
+                    gstbuffer.unmap(map_info)
+
                     self.user_classifier_function(gstbuffer)
 
     def setup_window(self):
