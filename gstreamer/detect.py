@@ -125,11 +125,17 @@ def main():
     default_model_dir = '../all_models'
     default_model = 'mobilenet_ssd_v2_coco_quant_postprocess_edgetpu.tflite'
     default_labels = 'coco_labels.txt'
+    default_face_model = 'face_classifier_model.tflite'
+    default_face_labels = 'face_classifier_model.txt'
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', help='.tflite model path',
                         default=os.path.join(default_model_dir,default_model))
     parser.add_argument('--labels', help='label file path',
                         default=os.path.join(default_model_dir, default_labels))
+    parser.add_argument('--face_model', help='face classifier .tflite model path',
+                        default=os.path.join(default_model_dir,default_face_model))
+    parser.add_argument('--face_labels', help='face label file path',
+                        default=os.path.join(default_model_dir,default_face_labels))
     parser.add_argument('--top_k', type=int, default=3,
                         help='number of categories with highest score to display')
     parser.add_argument('--threshold', type=float, default=0.1,
@@ -148,7 +154,7 @@ def main():
 
     args = parser.parse_args()
 
-    print('Loading {} with {} labels.'.format(args.model, args.labels))
+    print('Loading detection model {} with {} labels.'.format(args.model, args.labels))
     interpreter = make_interpreter(args.model)
     interpreter.allocate_tensors()
     labels = read_label_file(args.labels)
@@ -156,8 +162,9 @@ def main():
 
     label_colors = make_label_colors(labels)
 
-    interpreter_classifier = make_interpreter('/home/mendel/edgetpu/retrain-imprinting/retrained_imprinting_model.tflite')
-    face_labels = read_label_file('/home/mendel/edgetpu/retrain-imprinting/retrained_imprinting_model.txt')
+    print('Loading face classifier model {} with {} labels.'.format(args.face_model, args.face_labels))
+    interpreter_classifier = make_interpreter(args.face_model)
+    face_labels = read_label_file(args.face_labels)
     interpreter_classifier.allocate_tensors()
     classifier_size = input_size(interpreter_classifier)
     face_label = None

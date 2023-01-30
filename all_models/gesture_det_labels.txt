@@ -1,0 +1,11 @@
+0 GestUp
+1 GestDown
+2 GestLeft
+3 GestRight
+4 GestOk
+5 GestBack
+6 GestExit
+7 GestMenu
+8 GestPause
+9 Human
+10 Face
