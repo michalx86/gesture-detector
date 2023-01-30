@@ -32,6 +32,24 @@ def set_face_coords(glbox, face_coords):
         glbox.set_property("crop-y", face_coords[1])
         glbox.set_property("crop-len", face_coords[2])
 
+def save_screenshot(gstbuffer, width, height, name):
+    # Get read access to the buffer data
+    success, map_info = gstbuffer.map(Gst.MapFlags.READ)
+    if not success:
+        raise RuntimeError("Could not map buffer data!")
+
+    numpy_frame = np.ndarray(
+      shape=(width, height, 3),
+      dtype=np.uint8,
+      buffer=map_info.data)
+
+    img = Image.fromarray(numpy_frame)
+    img.save(name)
+
+    # Clean up the buffer mapping
+    gstbuffer.unmap(map_info)
+
+
 class GstSink:
     def __init__(self, parent, sink_name, box_name):
         self.parent =  parent
@@ -96,6 +114,7 @@ class GstPipeline:
         self.running = False
         self.src_size = src_size
         self.condition = threading.Condition()
+        self.i = 0
 
         self.pipeline = Gst.parse_launch(pipeline)
         self.overlay = self.pipeline.get_by_name('overlay')
@@ -167,7 +186,10 @@ class GstPipeline:
                 # Passing Gst.Buffer as input tensor avoids 2 copies of it.
                 gstbuffer = gstsample.get_buffer()
                 if self.sinks[0] == sink:
-                    svg, face_coords = self.user_function(gstbuffer, self.src_size, sink.get_box())
+                    box = sink.get_box()
+                    #save_screenshot(gstbuffer, box[2], box[3], "face_det_{:03d}.jpg".format(self.i))
+                    #self.i = self.i + 1
+                    svg, face_coords = self.user_function(gstbuffer, self.src_size, box)
 
                     set_face_coords(self.sinks[1].glbox, face_coords)
                     FACE_DEBUG_MODE = False
@@ -182,23 +204,9 @@ class GstPipeline:
                         if self.overlaysink:
                             self.overlaysink.set_property('svg', svg)
                 elif self.sinks[1] == sink:
-                    sink.get_box()
-
-                    # Get read access to the buffer data
-                    success, map_info = gstbuffer.map(Gst.MapFlags.READ)
-                    if not success:
-                        raise RuntimeError("Could not map buffer data!")
-
-                    numpy_frame = np.ndarray(
-                      shape=(224, 224, 3),
-                      dtype=np.uint8,
-                      buffer=map_info.data)
-
-                    img = Image.fromarray(numpy_frame)
-                    img.save("faces.png")
-
-                    # Clean up the buffer mapping
-                    gstbuffer.unmap(map_info)
+                    box = sink.get_box()
+                    #save_screenshot(gstbuffer, box[2], box[3], "face_class_{:03d}.png".format(self.i))
+                    #self.i = self.i + 1
 
                     self.user_classifier_function(gstbuffer)
 
