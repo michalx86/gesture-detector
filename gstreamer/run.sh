@@ -5,6 +5,7 @@ GEST_DET_MODEL="efficientdet0-lite-gestures_edgetpu.tflite"
 GESTURE_DET_LABELS="gesture_det_labels.txt"
 
 FACE_CLAS_MODEL="face_classifier_model.tflite"
+#FACE_CLAS_MODEL="face_classifier_model_generic.tflite"
 FACE_CLAS_LABELS="face_classifier_model.txt"
 
 CPE_IP_ARG=""

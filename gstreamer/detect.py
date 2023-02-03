@@ -53,6 +53,10 @@ from pycoral.adapters import classify
 from pycoral.adapters.common import set_input
 from PIL import Image
 
+SHOW_FACES_ONLY = False
+HUMAN_ID = 9
+FACE_ID = 10
+
 def rgb(color):
     return 'rgb(%s, %s, %s)' % color
 
@@ -97,6 +101,8 @@ def generate_svg(src_size, inference_box, objs, labels, label_colors, text_lines
     for obj in objs:
         bbox = obj.bbox
         if not bbox.valid:
+            continue
+        if SHOW_FACES_ONLY and obj.id <= HUMAN_ID:
             continue
         x, y, w, h = calc_coord(bbox, box_x, box_y, scale_x, scale_y)
         percent = int(100 * obj.score)
@@ -174,6 +180,7 @@ def main():
     tracked_obj = None
     key_emtr = KeyEmitter()
 
+
     def user_callback(input_tensor, src_size, inference_box):
       nonlocal fps_counter
       nonlocal tracked_obj
@@ -188,7 +195,7 @@ def main():
       end_time = time.monotonic()
 
       face_obj = None
-      face_objs = list(filter( lambda obj: obj.score > 0.3 and obj.id == 10, objs))
+      face_objs = list(filter( lambda obj: obj.score > 0.3 and obj.id == FACE_ID, objs))
       face_coords = 0.0, 0.0, 0.01
       if face_objs:
           face_obj = face_objs[0]
@@ -214,8 +221,11 @@ def main():
           face_coords = x,y,l
 
 
-      filtered_objs = list(filter( lambda obj: obj.score > 0.5 and obj.id <= RawCode.GEST_PAUSE.value, objs))
-      tracked_obj = object_tracker.track(tracked_obj, filtered_objs)
+      if SHOW_FACES_ONLY:
+          tracked_obj = None
+      else:
+          filtered_objs = list(filter( lambda obj: obj.score > 0.5 and obj.id <= RawCode.GEST_PAUSE.value, objs))
+          tracked_obj = object_tracker.track(tracked_obj, filtered_objs)
 
       tracked_obj_id    = tracked_obj.id    if tracked_obj is not None else -1
   
@@ -242,20 +252,25 @@ def main():
 
       return generate_svg(src_size, inference_box, objs, labels, label_colors, text_lines, tracked_obj, face_obj, face_label), face_coords
 
+
     def user_classifier_callback(input_tensor):
       nonlocal face_label
-      #set_input(interpreter_classifier, classifier_img)
-      #interpreter_classifier.invoke()
-      run_inference(interpreter_classifier, input_tensor)
+
+      if isinstance(input_tensor, Image.Image):
+        set_input(interpreter_classifier, input_tensor)
+        interpreter_classifier.invoke()
+      else:
+        run_inference(interpreter_classifier, input_tensor)
+
       candidates = classify.get_classes(interpreter_classifier, 5, score_threshold=0.90)
       if candidates:
           face_label = face_labels[candidates[0].id]
       else:
           face_label = ""
       for candidate in candidates:
-        print("Candidate {}".format(candidate))
-        print("Candidate Name {}".format(face_labels[candidate.id]))
+          print("Candidate Name: {}({}) - {:02.2f}%".format(face_labels[candidate.id], candidate.id, candidate.score * 100))
       return
+
 
     result = gstreamer.run_pipeline(user_callback,
                                     user_classifier_callback,

@@ -32,7 +32,8 @@ def set_face_coords(glbox, face_coords):
         glbox.set_property("crop-y", face_coords[1])
         glbox.set_property("crop-len", face_coords[2])
 
-def save_screenshot(gstbuffer, width, height, name):
+
+def gstbuffer2img(gstbuffer, width, height):
     # Get read access to the buffer data
     success, map_info = gstbuffer.map(Gst.MapFlags.READ)
     if not success:
@@ -44,10 +45,16 @@ def save_screenshot(gstbuffer, width, height, name):
       buffer=map_info.data)
 
     img = Image.fromarray(numpy_frame)
-    img.save(name)
 
     # Clean up the buffer mapping
     gstbuffer.unmap(map_info)
+
+    return img
+
+
+def save_screenshot(gstbuffer, width, height, name):
+    img = gstbuffer2img(gstbuffer, width, height)
+    img.save(name)
 
 
 class GstSink:
@@ -209,6 +216,8 @@ class GstPipeline:
                     #self.i = self.i + 1
 
                     self.user_classifier_function(gstbuffer)
+                    #self.user_classifier_function(gstbuffer2img(gstbuffer, box[2], box[3]))
+
 
     def setup_window(self):
         # Only set up our own window if we have Coral overlay sink in the pipeline.
