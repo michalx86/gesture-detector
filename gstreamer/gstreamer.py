@@ -27,10 +27,18 @@ Gst.init(None)
 
 def set_face_coords(glbox, face_coords): 
     if glbox is not None:
+        if face_coords is None:
+            face_coords=(0,0,0)
         #print("Face coords: {}".format(face_coords))
+        # Case 1: glbox
         glbox.set_property("crop-x", face_coords[0])
         glbox.set_property("crop-y", face_coords[1])
         glbox.set_property("crop-len", face_coords[2])
+        # Case 2: videocrop box
+        #glbox.set_property("left", face_coords[0])
+        #glbox.set_property("top", face_coords[1])
+        #glbox.set_property("right", 0)
+        #glbox.set_property("bottom", 0)
 
 
 def gstbuffer2img(gstbuffer, width, height):
@@ -98,7 +106,6 @@ class GstSink:
             glbox = self.parent.pipeline.get_by_name(self.box_name)
             if glbox:
                 glbox = glbox.get_by_name('filter')
-                #print("glbox2: {}".format(glbox))
                 self.glbox=glbox
             box = self.parent.pipeline.get_by_name('box')
             assert glbox or box
@@ -107,6 +114,8 @@ class GstSink:
                 self.box = (glbox.get_property('x'), glbox.get_property('y'),
                         glbox.get_property('width'), glbox.get_property('height'))
             else:
+                print("BOX: {},{},{},{}".format(box.get_property('left'), box.get_property('top'), box.get_property('right'), box.get_property('bottom')))
+                print("SINK: {}".format(self.sink_size))
                 self.box = (-box.get_property('left'), -box.get_property('top'),
                     self.sink_size[0] + box.get_property('left') + box.get_property('right'),
                     self.sink_size[1] + box.get_property('top') + box.get_property('bottom'))
@@ -115,12 +124,14 @@ class GstSink:
 
 
 class GstPipeline:
-    def __init__(self, pipeline, user_function, user_classifier_function, src_size):
+    def __init__(self, pipeline, user_function, user_classifier_function, src_size, inference_box, sync_classification):
         self.user_function = user_function
         self.user_classifier_function = user_classifier_function
         self.running = False
         self.src_size = src_size
+        self.inference_box = inference_box
         self.condition = threading.Condition()
+        self.sync_classification = sync_classification
         self.i = 0
 
         self.pipeline = Gst.parse_launch(pipeline)
@@ -128,7 +139,9 @@ class GstPipeline:
         self.gloverlay = self.pipeline.get_by_name('gloverlay')
         self.overlaysink = self.pipeline.get_by_name('overlaysink')
 
-        self.sinks = [GstSink(self, 'appsink', 'glbox'), GstSink(self, 'appsink1', 'glbox1')]
+        self.sinks = [GstSink(self, 'appsink', 'glbox')]
+        if self.sync_classification == False:
+            self.sinks.append(GstSink(self, 'appsink1', 'glbox1'))
 
         glbox = self.pipeline.get_by_name('glbox2')
         if glbox:
@@ -180,7 +193,8 @@ class GstPipeline:
     def inference_loop(self):
         while True:
             with self.condition:
-                while not self.sinks[0].gstsample and not self.sinks[1].gstsample and self.running:
+                #while not self.sinks[0].gstsample and not self.sinks[1].gstsample and self.running:
+                while not self.sinks[0].gstsample and self.running:
                     self.condition.wait()
                 if not self.running:
                     break
@@ -194,14 +208,38 @@ class GstPipeline:
                 gstbuffer = gstsample.get_buffer()
                 if self.sinks[0] == sink:
                     box = sink.get_box()
+                    #print("Detection Box: {}".format(box))
+                    #print("Src Size: {}".format(self.src_size))
+                    #print("Inference Box: {}".format(self.inference_box))
+
                     #save_screenshot(gstbuffer, box[2], box[3], "face_det_{:03d}.jpg".format(self.i))
                     #self.i = self.i + 1
-                    svg, face_coords = self.user_function(gstbuffer, self.src_size, box)
 
-                    set_face_coords(self.sinks[1].glbox, face_coords)
-                    FACE_DEBUG_MODE = False
-                    if FACE_DEBUG_MODE:
-                        set_face_coords(self.glbox, face_coords)
+                    if self.sync_classification:
+                        img = gstbuffer2img(gstbuffer, box[2], box[3])
+                        #img.save("detection.jpg")
+
+                        svg, face_coords = self.user_function(img, self.src_size, self.inference_box)
+
+                        if face_coords:
+                            x = face_coords[0]*box[2]
+                            y = face_coords[1]*box[3]
+                            l = face_coords[2]*box[2]
+                            ## this should work for numpy and cv2 - potentially faster
+                            ##face_image = img[y:(y + l), x:(x + l)]
+                            face_image = img.crop((x,y, x+l, y+l))
+                            #face_image = face_image.resize((224,224), Image.LANCZOS)
+                            #face_image.save("face.png")
+                            self.user_classifier_function(face_image)
+                    else:
+                        svg, face_coords = self.user_function(gstbuffer, self.src_size, box)
+                        #self.pipeline.set_state(Gst.State.READY)
+                        set_face_coords(self.sinks[1].glbox, face_coords)
+                        #self.pipeline.set_state(Gst.State.PLAYING)
+                        FACE_DEBUG_MODE = False
+                        if FACE_DEBUG_MODE:
+                            set_face_coords(self.glbox, face_coords)
+
 
                     if svg:
                         if self.overlay:
@@ -212,11 +250,17 @@ class GstPipeline:
                             self.overlaysink.set_property('svg', svg)
                 elif self.sinks[1] == sink:
                     box = sink.get_box()
+                    #print("Face Box: {}".format(box))
                     #save_screenshot(gstbuffer, box[2], box[3], "face_class_{:03d}.png".format(self.i))
                     #self.i = self.i + 1
 
                     self.user_classifier_function(gstbuffer)
                     #self.user_classifier_function(gstbuffer2img(gstbuffer, box[2], box[3]))
+
+                    #face_image = face_image.resize((224,224), Image.BICUBIC) #LANCZOS) #ANTIALIAS)
+                    #face_image.save("face.jpg")
+                    #self.user_classifier_function(face_image)
+
 
 
     def setup_window(self):
@@ -292,11 +336,13 @@ def run_pipeline(user_function,
                  user_classifier_function,
                  src_size,
                  appsink_size,
+                 inference_size,
                  videosrc='/dev/video1',
                  videofmt='raw',
                  headless=False,
                  crop=False,
-                 zoom_factor=1.0):
+                 zoom_factor=1.0,
+                 sync_classification=True):
 
     raw_src_size = src_size
 
@@ -355,7 +401,8 @@ def run_pipeline(user_function,
                 PIPELINE += '  t. ! queue ! glfilterbin filter="glcropbox zoom-factor={zoom_factor}" name=glbox'.format(zoom_factor=zoom_factor)
                 PIPELINE += """ ! {sink_caps} ! {sink_element}
                 """
-                PIPELINE += '  t. ! queue ! glfilterbin filter="glcropbox zoom-factor=1.0" name=glbox1 ! video/x-raw,format=RGB,width=224,height=224 ! appsink name=appsink1 emit-signals=true max-buffers=1 drop=true'
+                if sync_classification == False:
+                    PIPELINE += '  t. ! queue ! glfilterbin filter="glcropbox zoom-factor=1.0" name=glbox1 ! video/x-raw,format=RGB,width=224,height=224 ! appsink name=appsink1 emit-signals=true max-buffers=1 drop=true'
                 PIPELINE += '  t. ! queue ! glfilterbin filter="glcropbox zoom-factor={zoom_factor}" name=glbox2'.format(zoom_factor=zoom_factor)
                 PIPELINE += ' ! video/x-raw,format=RGB,width={w},height={h} ! glsvgoverlaysink name=overlaysink'.format(w=src_size[0], h=src_size[1])
 
@@ -378,16 +425,37 @@ def run_pipeline(user_function,
                 """
             scale_caps = None
     else:
+        src_size = (src_size[1], src_size[1])
         scale = min(appsink_size[0] / src_size[0], appsink_size[1] / src_size[1])
         scale = tuple(int(x * scale) for x in src_size)
         scale_caps = 'video/x-raw,width={width},height={height}'.format(width=scale[0], height=scale[1])
+#        PIPELINE += """ ! tee name=t
+#            t. ! {leaky_q} ! videoconvert ! videoscale ! {scale_caps} ! videobox name=box autocrop=true
+#               ! {sink_caps} ! {sink_element}
+#            t. ! {leaky_q} ! videoconvert
+#               ! rsvgoverlay name=overlay ! videoconvert ! ximagesink sync=false
+#            """
+
+#        PIPELINE += """ ! videocrop left=80 right=80 ! tee name=t
+#            t. ! {leaky_q} ! videoconvert ! videoscale ! videocrop name=box
+#               ! {sink_caps} ! {sink_element}
+#            t. ! {leaky_q} ! videoconvert ! videoscale ! videocrop name=box1
+#               ! video/x-raw,format=RGB,width=224,height=224 ! appsink name=appsink1 emit-signals=true max-buffers=1 drop=true
+#            t. ! {leaky_q} ! videoconvert
+#               ! rsvgoverlay name=overlay ! videoconvert ! ximagesink sync=false
+#            """
+
+        additional_crop = round(raw_src_size[1] * (1 - 1 / zoom_factor) / 2)
+        crop_w = (raw_src_size[0] - raw_src_size[1]) // 2 + additional_crop
+        crop_h = additional_crop
+        #src_size = (src_size[1] - additional_crop * 2, src_size[1] - additional_crop * 2)
+        PIPELINE += ' ! videocrop top={crop_vert} left={crop_horiz} right={crop_horiz} bottom={crop_vert} ! videoscale ! video/x-raw,width={width},height={height}'.format(crop_horiz=crop_w, crop_vert=crop_h, width=src_size[0], height=src_size[1])
         PIPELINE += """ ! tee name=t
-            t. ! {leaky_q} ! videoconvert ! videoscale ! {scale_caps} ! videobox name=box autocrop=true
+            t. ! {leaky_q} ! videoconvert ! videoscale ! videocrop name=box
                ! {sink_caps} ! {sink_element}
             t. ! {leaky_q} ! videoconvert
-               ! rsvgoverlay name=overlay ! videoconvert ! ximagesink sync=false
+               ! rsvgoverlay name=overlay ! videoconvert ! videoscale ! video/x-raw,width=1000,height=1000 ! ximagesink sync=false
             """
-
     SINK_ELEMENT = 'appsink name=appsink emit-signals=true max-buffers=1 drop=true'
     SINK_CAPS = 'video/x-raw,format=RGB,width={width},height={height}'
     LEAKY_Q = 'queue max-size-buffers=1 leaky=downstream'
@@ -400,5 +468,6 @@ def run_pipeline(user_function,
 
     print('Gstreamer pipeline:\n', pipeline)
 
-    pipeline = GstPipeline(pipeline, user_function, user_classifier_function, src_size)
+    inference_box = (0,0, inference_size[1], inference_size[1])
+    pipeline = GstPipeline(pipeline, user_function, user_classifier_function, src_size, inference_box, sync_classification)
     pipeline.run()

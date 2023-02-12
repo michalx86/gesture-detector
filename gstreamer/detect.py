@@ -46,11 +46,12 @@ from key_emitter import KeyEvent
 from pycoral.adapters.common import input_size
 from pycoral.adapters.detect import get_objects
 from pycoral.utils.dataset import read_label_file
-from pycoral.utils.edgetpu import make_interpreter
+from tflite_runtime.interpreter import Interpreter
 from pycoral.utils.edgetpu import run_inference
 
 from pycoral.adapters import classify
 from pycoral.adapters.common import set_input
+from pycoral.adapters.common import set_resized_input
 from PIL import Image
 
 SHOW_FACES_ONLY = False
@@ -156,12 +157,29 @@ def main():
     parser.add_argument('--zoom_factor', type=float, default=1.0,
                         help='Additional zoom when crop is used')
     parser.add_argument('--cpeip', help='IP address of CPE to send keycodes to')
+    parser.add_argument('--edgetpu', help='Use Coral Edge TPU Accelerator to speed up detection',
+                        action='store_true')
+    parser.add_argument('--sync_classification', help='Classification will be done on the same image as detection. This is slower, but classification will be more accurate.',
+                        action='store_true')
+    parser.add_argument('--hq_sync_classification', help='Hight Quality Classification. Only possible with --sync_classification. Classification will be performed on input image, not on image of the sizeof detection model input tensor. Even slower - scaling on main CPU.',
+                        action='store_true')
     parser.set_defaults(crop=False)
-
     args = parser.parse_args()
 
+    use_TPU = args.edgetpu
+
+    if args.hq_sync_classification == True:
+      assert args.sync_classification == True, "--hq_sync_classification only possible with --sync_classification"
+
     print('Loading detection model {} with {} labels.'.format(args.model, args.labels))
-    interpreter = make_interpreter(args.model)
+    if use_TPU:
+        from pycoral.utils.edgetpu import make_interpreter
+        interpreter = make_interpreter(args.model)
+        # We could also use:
+        #from tflite_runtime.interpreter import load_delegate
+        #interpreter = Interpreter(args.model, experimental_delegates=[load_delegate('libedgetpu.so.1.0')])
+    else:
+        interpreter = Interpreter(args.model)
     interpreter.allocate_tensors()
     labels = read_label_file(args.labels)
     inference_size = input_size(interpreter)
@@ -169,7 +187,10 @@ def main():
     label_colors = make_label_colors(labels)
 
     print('Loading face classifier model {} with {} labels.'.format(args.face_model, args.face_labels))
-    interpreter_classifier = make_interpreter(args.face_model)
+    if use_TPU:
+        interpreter_classifier = make_interpreter(args.face_model)
+    else:
+        interpreter_classifier = Interpreter(args.face_model)
     face_labels = read_label_file(args.face_labels)
     interpreter_classifier.allocate_tensors()
     classifier_size = input_size(interpreter_classifier)
@@ -188,7 +209,13 @@ def main():
       nonlocal face_label
       start_time = time.monotonic()
 
-      run_inference(interpreter, input_tensor)
+      if isinstance(input_tensor, Image.Image):
+        #set_input(interpreter, input_tensor)
+        set_resized_input(interpreter, input_tensor.size, lambda size: input_tensor.resize(size, Image.NEAREST))
+        interpreter.invoke()
+      else:
+        run_inference(interpreter, input_tensor)
+
       # For larger input image sizes, use the edgetpu.classification.engine for better performance
       objs = get_objects(interpreter, args.threshold)[:args.top_k]
 
@@ -196,7 +223,7 @@ def main():
 
       face_obj = None
       face_objs = list(filter( lambda obj: obj.score > 0.3 and obj.id == FACE_ID, objs))
-      face_coords = 0.0, 0.0, 0.01
+      face_coords = None
       if face_objs:
           face_obj = face_objs[0]
           #print('Face: {}'.format(face_objs[0]))
@@ -257,7 +284,8 @@ def main():
       nonlocal face_label
 
       if isinstance(input_tensor, Image.Image):
-        set_input(interpreter_classifier, input_tensor)
+        #set_input(interpreter_classifier, input_tensor)
+        set_resized_input(interpreter_classifier, input_tensor.size, lambda size: input_tensor.resize(size, Image.BICUBIC))
         interpreter_classifier.invoke()
       else:
         run_inference(interpreter_classifier, input_tensor)
@@ -275,11 +303,13 @@ def main():
     result = gstreamer.run_pipeline(user_callback,
                                     user_classifier_callback,
                                     src_size=(640, 480), # (640,480) or (800, 600) or (1280,720)
-                                    appsink_size=inference_size,
+                                    appsink_size=(480,480) if args.hq_sync_classification else inference_size,
+                                    inference_size=inference_size,
                                     videosrc=args.videosrc,
                                     videofmt=args.videofmt,
                                     crop=args.crop,
-                                    zoom_factor=args.zoom_factor)
+                                    zoom_factor=args.zoom_factor,
+                                    sync_classification=args.sync_classification)
 
 if __name__ == '__main__':
     main()

@@ -58,7 +58,7 @@ from PIL import Image
 from pycoral.adapters import classify
 from pycoral.adapters import common
 from pycoral.learn.imprinting.engine import ImprintingEngine
-from pycoral.utils.edgetpu import make_interpreter
+from tflite_runtime.interpreter import Interpreter
 
 
 def _read_data(path, test_ratio):
@@ -149,6 +149,8 @@ def _parse_args():
       '--keep_classes',
       action='store_true',
       help='Whether to keep base model classes.')
+  parser.add_argument('--edgetpu', help='Use Coral Edge TPU Accelerator to speed up detection',
+                        action='store_true')
   args = parser.parse_args()
   if not args.output:
     model_name = os.path.basename(args.model_path)
@@ -166,8 +168,15 @@ def _parse_args():
 def main():
   args = _parse_args()
 
+  use_TPU = args.edgetpu
+
   engine = ImprintingEngine(args.model_path, keep_classes=args.keep_classes)
-  extractor = make_interpreter(engine.serialize_extractor_model(), device=':0')
+  if use_TPU:
+        from pycoral.utils.edgetpu import make_interpreter
+        extractor = make_interpreter(engine.serialize_extractor_model(), device=':0')
+  else:
+        extractor = Interpreter(model_content=engine.serialize_extractor_model())
+
   extractor.allocate_tensors()
   shape = common.input_size(extractor)
 
@@ -202,7 +211,11 @@ def main():
   _save_labels(labels_map, args.output)
 
   print('------------------   Start evaluating   ------------------')
-  interpreter = make_interpreter(args.output)
+  if use_TPU:
+      from pycoral.utils.edgetpu import make_interpreter
+      interpreter = make_interpreter(args.output)
+  else:
+      interpreter = Interpreter(args.output)
   interpreter.allocate_tensors()
   size = common.input_size(interpreter)
 
