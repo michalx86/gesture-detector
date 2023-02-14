@@ -2,6 +2,8 @@ if false; then
   # Google Coral DevBoard
   VIDEO_DEV="/dev/video1"
   OPTIONS="--edgetpu"
+  #OPTIONS="--edgetpu --sync_classification"
+  #OPTIONS="--edgetpu --sync_classification --hq_sync_classification"
   #GEST_DET_MODEL="ssd_mobilenet_v2_gestures_edgetpu.tflite"
   GEST_DET_MODEL="efficientdet0-lite-gestures_edgetpu.tflite"
   FACE_CLAS_MODEL="mobilenet_v1_face_classifier_edgetpu.tflite"
@@ -11,6 +13,7 @@ else
   VIDEO_DEV="/dev/video0"
   #OPTIONS="--sync_classification"
   OPTIONS="--sync_classification --hq_sync_classification"
+  #OPTIONS="--sync_classification --hq_sync_classification --detect_face_only"
   GEST_DET_MODEL="ssd_mobilenet_v2_gestures.tflite"
   GEST_DET_MODEL="efficientdet0-lite-gestures.tflite"
   FACE_CLAS_MODEL="mobilenet_v1_face_classifier.tflite"

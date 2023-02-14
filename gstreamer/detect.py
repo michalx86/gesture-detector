@@ -35,6 +35,7 @@ import colorsys
 import gstreamer
 import os
 import requests
+import sys
 import time
 
 from common import avg_fps_counter, SVG
@@ -53,6 +54,9 @@ from pycoral.adapters import classify
 from pycoral.adapters.common import set_input
 from pycoral.adapters.common import set_resized_input
 from PIL import Image
+import numpy as np
+from pycoral.adapters.detect import BBox
+from pycoral.adapters.detect import Object
 
 SHOW_FACES_ONLY = False
 HUMAN_ID = 9
@@ -163,10 +167,16 @@ def main():
                         action='store_true')
     parser.add_argument('--hq_sync_classification', help='Hight Quality Classification. Only possible with --sync_classification. Classification will be performed on input image, not on image of the sizeof detection model input tensor. Even slower - scaling on main CPU.',
                         action='store_true')
+    parser.add_argument('--detect_face_only', help='Only detect Face with OpenCV haarcascade.',
+                        action='store_true')
     parser.set_defaults(crop=False)
     args = parser.parse_args()
 
     use_TPU = args.edgetpu
+
+    if args.detect_face_only:
+        import cv2
+        face_cascade = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
 
     if args.hq_sync_classification == True:
       assert args.sync_classification == True, "--hq_sync_classification only possible with --sync_classification"
@@ -208,20 +218,42 @@ def main():
       nonlocal key_emtr
       nonlocal face_label
       start_time = time.monotonic()
+      face_obj = None
+      inference_box_size = inference_box[2]
+
+      if 'cv2' not in sys.modules and isinstance(input_tensor, np.ndarray):
+          input_tensor = Image.fromarray(input_tensor)
 
       if isinstance(input_tensor, Image.Image):
-        #set_input(interpreter, input_tensor)
-        set_resized_input(interpreter, input_tensor.size, lambda size: input_tensor.resize(size, Image.NEAREST))
-        interpreter.invoke()
+          # Deprecated - using numpy np.ndarray is faster
+          #set_input(interpreter, input_tensor)
+          set_resized_input(interpreter, input_tensor.size, lambda size: input_tensor.resize(size, Image.NEAREST))
+          interpreter.invoke()
+      elif isinstance(input_tensor, np.ndarray):
+          input_tensor_size = input_tensor.shape[0]
+
+          if args.detect_face_only:
+              gray_img = cv2.cvtColor(input_tensor, cv2.COLOR_RGB2GRAY)
+              if gray_img is not None:
+                  faces = face_cascade.detectMultiScale(gray_img, scaleFactor=1.2, minNeighbors=5, minSize=(30, 30))
+                  if len(faces) > 0:
+                      x, y, w, h = faces[0] * inference_box_size / input_tensor_size
+                      face_obj = Object(10,1.0,BBox(x, y, x + w, y + h))
+          else:
+              if input_tensor_size != inference_box_size:
+                  input_tensor = cv2.resize(input_tensor, (inference_box_size, inference_box_size), cv2.INTER_NEAREST)
+              run_inference(interpreter, input_tensor.ravel())
       else:
-        run_inference(interpreter, input_tensor)
+          run_inference(interpreter, input_tensor)
+
+      end_time = time.monotonic()
 
       # For larger input image sizes, use the edgetpu.classification.engine for better performance
       objs = get_objects(interpreter, args.threshold)[:args.top_k]
 
-      end_time = time.monotonic()
+      if face_obj is not None:
+          objs.append(face_obj)
 
-      face_obj = None
       face_objs = list(filter( lambda obj: obj.score > 0.3 and obj.id == FACE_ID, objs))
       face_coords = None
       if face_objs:
@@ -282,6 +314,12 @@ def main():
 
     def user_classifier_callback(input_tensor):
       nonlocal face_label
+
+      if isinstance(input_tensor, np.ndarray):
+          if 'cv2' not in sys.modules:
+              input_tensor = Image.fromarray(input_tensor)
+          else:
+              input_tensor = cv2.resize(input_tensor,(224,224), cv2.INTER_LINEAR).ravel()
 
       if isinstance(input_tensor, Image.Image):
         #set_input(interpreter_classifier, input_tensor)

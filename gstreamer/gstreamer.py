@@ -41,7 +41,7 @@ def set_face_coords(glbox, face_coords):
         #glbox.set_property("bottom", 0)
 
 
-def gstbuffer2img(gstbuffer, width, height):
+def gstbuffer2nparray(gstbuffer, width, height):
     # Get read access to the buffer data
     success, map_info = gstbuffer.map(Gst.MapFlags.READ)
     if not success:
@@ -52,13 +52,15 @@ def gstbuffer2img(gstbuffer, width, height):
       dtype=np.uint8,
       buffer=map_info.data)
 
-    img = Image.fromarray(numpy_frame)
-
     # Clean up the buffer mapping
     gstbuffer.unmap(map_info)
 
-    return img
+    return numpy_frame
 
+
+def gstbuffer2img(gstbuffer, width, height):
+    numpy_frame = gstbuffer2nparray
+    return Image.fromarray(numpy_frame)
 
 def save_screenshot(gstbuffer, width, height, name):
     img = gstbuffer2img(gstbuffer, width, height)
@@ -216,21 +218,39 @@ class GstPipeline:
                     #self.i = self.i + 1
 
                     if self.sync_classification:
-                        img = gstbuffer2img(gstbuffer, box[2], box[3])
+                        #img = gstbuffer2img(gstbuffer, box[2], box[3])
                         #img.save("detection.jpg")
+                        #svg, face_coords = self.user_function(img, self.src_size, self.inference_box)
+                        #img_size = img.size[0]
 
-                        svg, face_coords = self.user_function(img, self.src_size, self.inference_box)
+                        nparray = gstbuffer2nparray(gstbuffer, box[2], box[3])
+                        #img = Image.fromarray(nparray)
+                        #img.save("detection.jpg")
+                        img_size = nparray.shape[0]
+                        svg, face_coords = self.user_function(nparray, self.src_size, self.inference_box)
 
                         if face_coords:
-                            x = face_coords[0]*box[2]
-                            y = face_coords[1]*box[3]
-                            l = face_coords[2]*box[2]
-                            ## this should work for numpy and cv2 - potentially faster
-                            ##face_image = img[y:(y + l), x:(x + l)]
-                            face_image = img.crop((x,y, x+l, y+l))
+                            x = int(round(face_coords[0] * img_size))
+                            y = int(round(face_coords[1] * img_size))
+                            l = int(round(face_coords[2] * img_size))
+                            if x < 0:
+                                x = 0
+                            if y < 0:
+                                y = 0
+
+                            # PIL Image are depricated - slower than numpy
+                            #face_image = img.crop((x,y, x+l, y+l))
                             #face_image = face_image.resize((224,224), Image.LANCZOS)
+                            #self.user_classifier_function(face_image)
+
+                            ## Numpy operations are faster
+                            face_nparray = nparray[y:(y + l), x:(x + l)]
+
+                            self.user_classifier_function(face_nparray)
+
+                            # For debug purposes
+                            #face_image = Image.fromarray(face_nparray)
                             #face_image.save("face.png")
-                            self.user_classifier_function(face_image)
                     else:
                         svg, face_coords = self.user_function(gstbuffer, self.src_size, box)
                         #self.pipeline.set_state(Gst.State.READY)
