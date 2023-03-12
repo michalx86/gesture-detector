@@ -33,10 +33,13 @@ python3 detect.py \
 import argparse
 import colorsys
 import gstreamer
+import operator
 import os
 import requests
+import subprocess
 import sys
 import time
+import cv2
 
 from common import avg_fps_counter, SVG
 import object_tracker
@@ -59,8 +62,43 @@ from pycoral.adapters.detect import BBox
 from pycoral.adapters.detect import Object
 
 SHOW_FACES_ONLY = False
+TRACK_FACES_ONLY = True
 HUMAN_ID = 9
 FACE_ID = 10
+
+# States
+WAIT_FOR_FACE_STATE = 0
+FACE_TRACKING_STATE = 1
+FACE_NAMING_STATE   = 2
+
+TRACK_FACE_X_MIN = 0.2
+TRACK_FACE_Y_MIN = 0.2
+TRACK_FACE_X_MAX = 0.8
+TRACK_FACE_Y_MAX = 0.8
+TRACK_FACE_WIDHT  = TRACK_FACE_X_MAX - TRACK_FACE_X_MIN
+TRACK_FACE_HEIGHT = TRACK_FACE_Y_MAX - TRACK_FACE_Y_MIN
+
+FACE_TRACKER_INDICATOR_SIZE = (100, 100)
+
+TRACK_PATH = [(0.5,0.5), (0.0,0.0), (0.5,0.0), (1.0,0.0), (1.0,0.5), (1.0,1.0), (0.5,1.0), (0.0,1.0), (0.0,0.5)]
+FACE_DIR_NAME = "images"
+
+def name_generator():
+    while True:
+        for name in ["Wild Goose", "Bear Paw", "Singing Throat", "Star in the Sky", "Sand Storm", "Bluebird", "Lone Wolf", "Swift Arrow", "White Moon", "Light Wind"]:
+            yield name
+
+def save_face_img(image, box, dir_name, name, idx):
+    x, y, w, h = box
+    face_nparray = image[y:(y + h), x:(x + w)]
+    face_bgr_nparray = cv2.cvtColor(face_nparray, cv2.COLOR_RGB2BGR)
+    path = os.path.join(dir_name, name)
+    #print(path)
+    if not os.path.exists(path):
+        os.makedirs(path)
+    full_path = os.path.join(path, "{}.jpg".format(idx))
+    #print(full_path)
+    cv2.imwrite(full_path, face_bgr_nparray)
 
 def rgb(color):
     return 'rgb(%s, %s, %s)' % color
@@ -83,6 +121,8 @@ OUTLINE_WIDTH = 2
 LINE_COLOR = 'rgb(200,200,200)'
 LINE_WIDTH = 4
 FILL_COLOR = 'rgb(255,255,255)'
+FACE_TRACKER_FILL_COLOR = 'rgb(0, 0, 0)'
+FACE_TRACKER_FRAME_COLOR = 'rgb(0,255,0)'
 PROGRESS_BAR_WIDTH_RATIO = 0.1
 
 def calc_coord(bbox, box_x, box_y, scale_x, scale_y):
@@ -94,12 +134,14 @@ def calc_coord(bbox, box_x, box_y, scale_x, scale_y):
     # Scale to source coordinate space.
     return x * scale_x, y * scale_y, w * scale_x, h * scale_y
 
-def generate_svg(src_size, inference_box, objs, labels, label_colors, text_lines, tracked_obj, face_obj, face_label):
+def generate_svg(src_size, inference_box, objs, labels, label_colors, text_lines, tracked_obj, face_obj, face_label, state, track_path_idx, name):
 
     svg = SVG(src_size)
     src_w, src_h = src_size
     box_x, box_y, box_w, box_h = inference_box
     scale_x, scale_y = src_w / box_w, src_h / box_h
+
+    svg.add_rect(TRACK_FACE_X_MIN * src_w, TRACK_FACE_Y_MIN * src_h, TRACK_FACE_WIDHT * src_w, TRACK_FACE_HEIGHT * src_h, FACE_TRACKER_FRAME_COLOR, LINE_WIDTH, 1.0)
 
     for y, line in enumerate(text_lines, start=1):
         svg.add_text(10, y * 20, line, 20)
@@ -117,18 +159,38 @@ def generate_svg(src_size, inference_box, objs, labels, label_colors, text_lines
             svg.add_text(x,y - 25, "Hi "+ face_label + "!", 20)
         svg.add_rect(x, y, w, h, label_colors(obj.id), LINE_WIDTH, obj.score)
 
+    if state == FACE_TRACKING_STATE or state == FACE_NAMING_STATE:
+        svg.add_solid_rect(0,0, src_size[0], src_size[1], 0.7, FACE_TRACKER_FILL_COLOR)
+        if state == FACE_NAMING_STATE:
+            x = src_size[0] * 0.20
+            y = src_size[1] * 0.20
+            line_height = src_size[1] * 0.15
+            font_size = line_height * 0.85
+            svg.add_text(x, y, "I name you:", font_size)
+            svg.add_text(x, y + line_height, name, font_size)
+
     if tracked_obj is not None:
         bbox = tracked_obj.bbox
         if bbox.valid:
-            x, y, w, h = calc_coord(bbox, box_x, box_y, scale_x, scale_y)
-            progressbar_width = w * tracked_obj.score - 2 * LINE_WIDTH
-            progressbar_height = h * PROGRESS_BAR_WIDTH_RATIO
-            svg.add_rect(x + LINE_WIDTH, y + LINE_WIDTH,
-                         progressbar_width, progressbar_height, 
-                         LINE_COLOR, LINE_WIDTH, 1.0, FILL_COLOR)
-            svg.add_rect(x + OUTLINE_WIDTH+1, y + OUTLINE_WIDTH+1,
-                         w - 2 * (OUTLINE_WIDTH + 1),  progressbar_height + OUTLINE_WIDTH, 
-                         OUTLINE_COLOR, OUTLINE_WIDTH, 1.0)
+            if state == WAIT_FOR_FACE_STATE:
+                x, y, w, h = calc_coord(bbox, box_x, box_y, scale_x, scale_y)
+                progressbar_width = w * tracked_obj.score - 2 * LINE_WIDTH
+                progressbar_height = h * PROGRESS_BAR_WIDTH_RATIO
+                svg.add_rect(x + LINE_WIDTH, y + LINE_WIDTH,
+                             progressbar_width, progressbar_height,
+                             LINE_COLOR, LINE_WIDTH, 1.0, FILL_COLOR)
+                svg.add_rect(x + OUTLINE_WIDTH+1, y + OUTLINE_WIDTH+1,
+                             w - 2 * (OUTLINE_WIDTH + 1),  progressbar_height + OUTLINE_WIDTH,
+                             OUTLINE_COLOR, OUTLINE_WIDTH, 1.0)
+            elif state == FACE_TRACKING_STATE:
+                p0 = TRACK_PATH[track_path_idx]
+                p1 = TRACK_PATH[track_path_idx+1]
+                v = tuple(map(operator.sub, p1, p0))
+                vd = tuple(np.array(v) * tracked_obj.score)
+                p = tuple(map(operator.add, p0, vd))
+                stage_size = tuple(map(operator.sub, src_size, FACE_TRACKER_INDICATOR_SIZE))
+                coords = tuple(map(operator.mul, p, stage_size))
+                svg.add_solid_rect(coords[0], coords[1], FACE_TRACKER_INDICATOR_SIZE[0], FACE_TRACKER_INDICATOR_SIZE[1], 1.0, FILL_COLOR)
 
     return svg.finish()
 
@@ -169,13 +231,13 @@ def main():
                         action='store_true')
     parser.add_argument('--detect_face_only', help='Only detect Face with OpenCV haarcascade.',
                         action='store_true')
+    parser.add_argument('--output_url', help='URL to send face images package to, e.g: http://localhost:8084')
     parser.set_defaults(crop=False)
     args = parser.parse_args()
 
     use_TPU = args.edgetpu
 
     if args.detect_face_only:
-        import cv2
         face_cascade = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
 
     if args.hq_sync_classification == True:
@@ -209,6 +271,10 @@ def main():
     # Average fps over last 30 frames.
     fps_counter = avg_fps_counter(30)
     tracked_obj = None
+    state = WAIT_FOR_FACE_STATE
+    track_path_idx = 0
+    face_name_generator = name_generator()
+    name = next(face_name_generator)
     key_emtr = KeyEmitter()
 
 
@@ -217,9 +283,13 @@ def main():
       nonlocal tracked_obj
       nonlocal key_emtr
       nonlocal face_label
+      nonlocal state
+      nonlocal track_path_idx
+      nonlocal name
       start_time = time.monotonic()
       face_obj = None
       inference_box_size = inference_box[2]
+      face_box = None
 
       if 'cv2' not in sys.modules and isinstance(input_tensor, np.ndarray):
           input_tensor = Image.fromarray(input_tensor)
@@ -235,9 +305,10 @@ def main():
           if args.detect_face_only:
               gray_img = cv2.cvtColor(input_tensor, cv2.COLOR_RGB2GRAY)
               if gray_img is not None:
-                  faces = face_cascade.detectMultiScale(gray_img, scaleFactor=1.2, minNeighbors=5, minSize=(30, 30))
+                  faces = face_cascade.detectMultiScale(gray_img, scaleFactor=1.2, minNeighbors=5, minSize=(150, 150))
                   if len(faces) > 0:
-                      x, y, w, h = faces[0] * inference_box_size / input_tensor_size
+                      face_box = faces[0]
+                      x, y, w, h = face_box * inference_box_size / input_tensor_size
                       face_obj = Object(10,1.0,BBox(x, y, x + w, y + h))
           else:
               if input_tensor_size != inference_box_size:
@@ -256,32 +327,33 @@ def main():
 
       face_objs = list(filter( lambda obj: obj.score > 0.3 and obj.id == FACE_ID, objs))
       face_coords = None
+      face_obj = None
       if face_objs:
-          face_obj = face_objs[0]
-          #print('Face: {}'.format(face_objs[0]))
-          x1, y1, x2, y2 = face_objs[0].bbox
-          w = x2 - x1
-          h = y2 - y1
-          if w > h:
-              #l = w
-              #y1 = y1 - (l - h) // 2
-              l = h
-              x1 = x1 + (w - l) // 2
-          else:
-              #l = h
-              #x1 = x1 - (l - w) // 2
-              l = w
-              y1 = y1 + (h - l) // 1.25  # We want to get chin, but get rid of top of the head - hair, forehead
+          box = face_objs[0].bbox
+          x1, y1, x2, y2 = box / inference_box_size
+          if x1 > TRACK_FACE_X_MIN and y1 > TRACK_FACE_Y_MIN and x2 < TRACK_FACE_X_MAX and y2 < TRACK_FACE_Y_MAX:
+              face_obj = face_objs[0]
+              #print('Face: {}'.format(face_objs[0]))
+              w = x2 - x1
+              h = y2 - y1
+              if w > h:
+                  #l = w
+                  #y1 = y1 - (l - h) // 2
+                  l = h
+                  x1 = x1 + (w - l) // 2
+              else:
+                  #l = h
+                  #x1 = x1 - (l - w) // 2
+                  l = w
+                  y1 = y1 + (h - l) // 1.25  # We want to get chin, but get rid of top of the head - hair, forehead
 
-          inference_box_size = inference_box[2]
-          x = x1 / inference_box_size
-          y = y1 / inference_box_size
-          l = l / inference_box_size
-          face_coords = x,y,l
+              face_coords = x1,y1,l
 
 
       if SHOW_FACES_ONLY:
           tracked_obj = None
+      elif TRACK_FACES_ONLY:
+          tracked_obj = object_tracker.track(tracked_obj, [face_obj] if face_obj else [])
       else:
           filtered_objs = list(filter( lambda obj: obj.score > 0.5 and obj.id <= RawCode.GEST_PAUSE.value, objs))
           tracked_obj = object_tracker.track(tracked_obj, filtered_objs)
@@ -293,7 +365,7 @@ def main():
           tracked_obj = tracked_obj._replace(score = fill)
 
       if key != KeyCode.NO_KEY and event != KeyEvent.RELEASE:
-          print("Key: {}, Event {}".format(key, event))
+          #print("Key: {}, Event {}".format(key, event))
           if args.cpeip is not None:
               cpe_command = 'http://{}:10014/keyinjector/emulateuserevent/{}/{}'.format(args.cpeip, hex(key.value), KeyEvent.PRESS_RELEASE.value) 
               # alternatively we could use event.value, but it is not intuitive with sign language
@@ -309,7 +381,46 @@ def main():
       ]
       #print(' '.join(text_lines))
 
-      return generate_svg(src_size, inference_box, objs, labels, label_colors, text_lines, tracked_obj, face_obj, face_label), face_coords
+      svg = generate_svg(src_size, inference_box, objs, labels, label_colors, text_lines, tracked_obj, face_obj, face_label, state, track_path_idx, name)
+
+      if key == KeyCode.FACE:
+          #print("Key: {}, Event {}".format(key, event))
+          if state == WAIT_FOR_FACE_STATE:
+              track_path_idx = 0
+              if event == KeyEvent.PRESS:
+                  save_face_img(input_tensor, face_box, FACE_DIR_NAME, name, 0)
+                  state = FACE_TRACKING_STATE
+          elif state == FACE_TRACKING_STATE:
+              if event == KeyEvent.REPEAT:
+                  save_face_img(input_tensor, face_box, FACE_DIR_NAME, name, track_path_idx + 1)
+                  if track_path_idx < len(TRACK_PATH) - 2:
+                      track_path_idx = track_path_idx + 1
+                  else:
+                      state = FACE_NAMING_STATE
+                      subprocess.run(["tar", "-C", FACE_DIR_NAME, "-czvf", "images.tgz", "./"])
+                      #tar = tarfile.open("images.tgz", "w:gz")
+                      #for subdir in os.scandir(FACE_DIR_NAME):
+                      #    print(subdir.path)
+                      #    tar.add(subdir.path)
+                      #tar.close()
+                      if args.output_url is not None:
+                          try:
+                              res = requests.post(url=args.output_url,
+                                                  data=open('images.tgz', 'rb'),
+                                                  headers={'Content-Type': 'application/x-gzip'})
+                              print(res)
+                          except:
+                              print("Couldn't send images.tgz to URL: {}".format(args.output_url))
+
+              elif event == KeyEvent.RELEASE:
+                  state = WAIT_FOR_FACE_STATE
+          elif state == FACE_NAMING_STATE:
+              if event == KeyEvent.RELEASE:
+                  state = WAIT_FOR_FACE_STATE
+                  name = next(face_name_generator)
+
+      face_coords = None
+      return svg, face_coords
 
 
     def user_classifier_callback(input_tensor):

@@ -12,8 +12,8 @@ else
   export DISPLAY=:0
   VIDEO_DEV="/dev/video0"
   #OPTIONS="--sync_classification"
-  OPTIONS="--sync_classification --hq_sync_classification"
-  #OPTIONS="--sync_classification --hq_sync_classification --detect_face_only"
+  #OPTIONS="--sync_classification --hq_sync_classification"
+  OPTIONS="--sync_classification --hq_sync_classification --detect_face_only"
   GEST_DET_MODEL="ssd_mobilenet_v2_gestures.tflite"
   GEST_DET_MODEL="efficientdet0-lite-gestures.tflite"
   FACE_CLAS_MODEL="mobilenet_v1_face_classifier.tflite"
@@ -28,7 +28,13 @@ CPE_IP_ARG=""
 #CPE_IP_ARG="--cpeip 192.168.0.201"
 #CPE_IP_ARG="--cpeip 192.168.0.100"
 
+#OUTPUT_URL_ARG="--output_url http://localhost:8084"
+OUTPUT_URL_ARG="--output_url http://192.168.0.199:8084"
+
+rm -rf images
+rm images.tgz
+
 python3 detect.py \
       --model $MODEL_DIR/$GEST_DET_MODEL   --labels $MODEL_DIR/$GESTURE_DET_LABELS \
       --face_model $MODEL_DIR/$FACE_CLAS_MODEL   --face_labels $MODEL_DIR/$FACE_CLAS_LABELS \
-      --videosrc=${VIDEO_DEV} --crop --zoom_factor=1.0 ${OPTIONS} $CPE_IP_ARG
+      --videosrc=${VIDEO_DEV} --crop --zoom_factor=1.0 ${OPTIONS} $CPE_IP_ARG $OUTPUT_URL_ARG

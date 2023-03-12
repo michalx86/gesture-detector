@@ -16,6 +16,7 @@ class RawCode(Enum):
     GEST_EXIT  = 6
     GEST_MENU  = 7
     GEST_PAUSE = 8
+    GEST_FACE  = 10
 
 class KeyCode(Enum):
     NO_KEY = 0
@@ -27,6 +28,7 @@ class KeyCode(Enum):
     BACK   = 0x95
     MENU   = 0xc0
     PAUSE  = 0x9b
+    FACE   = 0x1
 
 class KeyEvent(Enum):
     NO_EVENT = 0
@@ -36,7 +38,7 @@ class KeyEvent(Enum):
     PRESS_RELEASE = 8300
 
 KEY_PRESS_FIRE_PERIOD  = 2.000
-KEY_REPEAT_FIRE_PERIOD = 1.000
+KEY_REPEAT_FIRE_PERIOD = 0.5000
 
 class KeyEmitter:
     def __init__(self):
@@ -63,6 +65,8 @@ class KeyEmitter:
             return KeyCode.MENU
         elif raw_input == RawCode.GEST_PAUSE:
             return KeyCode.PAUSE
+        elif raw_input == RawCode.GEST_FACE:
+            return KeyCode.FACE
         return KeyCode.NO_KEY
 
     def push_input(self, raw_input, time):

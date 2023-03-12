@@ -19,6 +19,7 @@ import time
 
 SVG_HEADER = '<svg width="{w}" height="{h}" version="1.1" >'
 SVG_RECT = '<rect x="{x}" y="{y}" width="{w}" height="{h}" stroke="{s}" stroke-width="{sw}" stroke-opacity="{so}" fill="{fill}" />'
+SVG_SOLID_RECT = '<rect x="{x}" y="{y}" width="{w}" height="{h}"  fill-opacity="{so}" fill="{fill}" />'
 SVG_TEXT = '''
 <text x="{x}" y="{y}" font-size="{fs}" dx="0.05em" dy="0.05em" fill="black">{t}</text>
 <text x="{x}" y="{y}" font-size="{fs}" fill="white">{t}</text>
@@ -43,6 +44,9 @@ class SVG:
 
     def add_rect(self, x, y, w, h, stroke, stroke_width, stroke_opacity, fill="none"):
         self.io.write(SVG_RECT.format(x=x, y=y, w=w, h=h, s=stroke, sw=stroke_width, so=stroke_opacity, fill=fill))
+
+    def add_solid_rect(self, x, y, w, h, fill_opacity, fill="none"):
+        self.io.write(SVG_SOLID_RECT.format(x=x, y=y, w=w, h=h, so=fill_opacity, fill=fill))
 
     def add_text(self, x, y, text, font_size):
         self.io.write(SVG_TEXT.format(x=x, y=y, t=text, fs=font_size))
