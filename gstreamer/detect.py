@@ -154,7 +154,7 @@ def generate_svg(src_size, inference_box, objs, labels, label_colors, text_lines
         x, y, w, h = calc_coord(bbox, box_x, box_y, scale_x, scale_y)
         percent = int(100 * obj.score)
         label = '{}% {}'.format(percent, labels.get(obj.id, obj.id))
-        svg.add_text(x, y - 5, label, 20)
+        #svg.add_text(x, y - 5, label, 20)
         if obj == face_obj and face_label is not None:
             svg.add_text(x,y - 25, "Hi "+ face_label + "!", 20)
         svg.add_rect(x, y, w, h, label_colors(obj.id), LINE_WIDTH, obj.score)

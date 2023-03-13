@@ -469,12 +469,12 @@ def run_pipeline(user_function,
         crop_w = (raw_src_size[0] - raw_src_size[1]) // 2 + additional_crop
         crop_h = additional_crop
         #src_size = (src_size[1] - additional_crop * 2, src_size[1] - additional_crop * 2)
-        PIPELINE += ' ! videocrop top={crop_vert} left={crop_horiz} right={crop_horiz} bottom={crop_vert} ! videoscale ! video/x-raw,width={width},height={height}'.format(crop_horiz=crop_w, crop_vert=crop_h, width=src_size[0], height=src_size[1])
+        PIPELINE += ' ! videoflip method=horizontal-flip ! videocrop top={crop_vert} left={crop_horiz} right={crop_horiz} bottom={crop_vert} ! videoscale ! video/x-raw,width={width},height={height}'.format(crop_horiz=crop_w, crop_vert=crop_h, width=src_size[0], height=src_size[1])
         PIPELINE += """ ! tee name=t
             t. ! {leaky_q} ! videoconvert ! videoscale ! videocrop name=box
                ! {sink_caps} ! {sink_element}
             t. ! {leaky_q} ! videoconvert
-               ! rsvgoverlay name=overlay ! videoconvert ! videoscale ! video/x-raw,width=1000,height=1000 ! ximagesink sync=false
+               ! rsvgoverlay name=overlay ! videoconvert ! videoscale ! video/x-raw,width=1940,height=1020 ! ximagesink  sync=false
             """
     SINK_ELEMENT = 'appsink name=appsink emit-signals=true max-buffers=1 drop=true'
     SINK_CAPS = 'video/x-raw,format=RGB,width={width},height={height}'

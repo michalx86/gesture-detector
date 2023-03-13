@@ -37,4 +37,4 @@ rm images.tgz
 python3 detect.py \
       --model $MODEL_DIR/$GEST_DET_MODEL   --labels $MODEL_DIR/$GESTURE_DET_LABELS \
       --face_model $MODEL_DIR/$FACE_CLAS_MODEL   --face_labels $MODEL_DIR/$FACE_CLAS_LABELS \
-      --videosrc=${VIDEO_DEV} --crop --zoom_factor=1.0 ${OPTIONS} $CPE_IP_ARG $OUTPUT_URL_ARG
+      --videosrc=${VIDEO_DEV} --crop --zoom_factor=1.2 ${OPTIONS} $CPE_IP_ARG $OUTPUT_URL_ARG
