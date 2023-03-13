@@ -190,7 +190,7 @@ def generate_svg(src_size, inference_box, objs, labels, label_colors, text_lines
                 p = tuple(map(operator.add, p0, vd))
                 stage_size = tuple(map(operator.sub, src_size, FACE_TRACKER_INDICATOR_SIZE))
                 coords = tuple(map(operator.mul, p, stage_size))
-                svg.add_solid_rect(coords[0], coords[1], FACE_TRACKER_INDICATOR_SIZE[0], FACE_TRACKER_INDICATOR_SIZE[1], 1.0, FILL_COLOR)
+                svg.add_pointer(coords[0], coords[1], FACE_TRACKER_INDICATOR_SIZE[0])
 
     return svg.finish()
 
