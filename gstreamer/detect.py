@@ -70,11 +70,12 @@ FACE_ID = 10
 WAIT_FOR_FACE_STATE = 0
 FACE_TRACKING_STATE = 1
 FACE_NAMING_STATE   = 2
+NAME_DISPLAY_STATE  = 3
 
 TRACK_FACE_X_MIN = 0.2
-TRACK_FACE_Y_MIN = 0.2
+TRACK_FACE_Y_MIN = 0.00
 TRACK_FACE_X_MAX = 0.8
-TRACK_FACE_Y_MAX = 0.8
+TRACK_FACE_Y_MAX = 0.995
 TRACK_FACE_WIDHT  = TRACK_FACE_X_MAX - TRACK_FACE_X_MIN
 TRACK_FACE_HEIGHT = TRACK_FACE_Y_MAX - TRACK_FACE_Y_MIN
 
@@ -85,7 +86,16 @@ FACE_DIR_NAME = "images"
 
 def name_generator():
     while True:
-        for name in ["Wild Goose", "Bear Paw", "Singing Throat", "Star in the Sky", "Sand Storm", "Bluebird", "Lone Wolf", "Swift Arrow", "White Moon", "Light Wind"]:
+        for name in ["Wild Goose",
+                     "Bear Paw",
+                     "Red Cloud",
+                     "Light Hair",
+                     "Sand Storm",
+                     "Bluebird",
+                     "Black Elk",
+                     "Swift Arrow",
+                     "White Moon",
+                     "Light Wind"]:
             yield name
 
 def save_face_img(image, box, dir_name, name, idx):
@@ -145,23 +155,25 @@ def generate_svg(src_size, inference_box, objs, labels, label_colors, text_lines
 
     for y, line in enumerate(text_lines, start=1):
         svg.add_text(10, y * 20, line, 20)
-    for obj in objs:
-        bbox = obj.bbox
-        if not bbox.valid:
-            continue
-        if SHOW_FACES_ONLY and obj.id <= HUMAN_ID:
-            continue
-        x, y, w, h = calc_coord(bbox, box_x, box_y, scale_x, scale_y)
-        percent = int(100 * obj.score)
-        label = '{}% {}'.format(percent, labels.get(obj.id, obj.id))
-        #svg.add_text(x, y - 5, label, 20)
-        if obj == face_obj and face_label is not None:
-            svg.add_text(x,y - 25, "Hi "+ face_label + "!", 20)
-        svg.add_rect(x, y, w, h, label_colors(obj.id), LINE_WIDTH, obj.score)
 
-    if state == FACE_TRACKING_STATE or state == FACE_NAMING_STATE:
+    if state == WAIT_FOR_FACE_STATE or state == FACE_TRACKING_STATE:
+        for obj in objs:
+            bbox = obj.bbox
+            if not bbox.valid:
+                continue
+            if SHOW_FACES_ONLY and obj.id <= HUMAN_ID:
+                continue
+            x, y, w, h = calc_coord(bbox, box_x, box_y, scale_x, scale_y)
+            percent = int(100 * obj.score)
+            label = '{}% {}'.format(percent, labels.get(obj.id, obj.id))
+            #svg.add_text(x, y - 5, label, 20)
+            if obj == face_obj and face_label is not None:
+                svg.add_text(x,y - 25, "Hi "+ face_label + "!", 20)
+            svg.add_rect(x, y, w, h, label_colors(obj.id), LINE_WIDTH, obj.score)
+
+    if state == FACE_TRACKING_STATE or state == FACE_NAMING_STATE or state == NAME_DISPLAY_STATE:
         svg.add_solid_rect(0,0, src_size[0], src_size[1], 0.7, FACE_TRACKER_FILL_COLOR)
-        if state == FACE_NAMING_STATE:
+        if state == FACE_NAMING_STATE or state == NAME_DISPLAY_STATE:
             x = src_size[0] * 0.20
             y = src_size[1] * 0.20
             line_height = src_size[1] * 0.15
@@ -381,43 +393,47 @@ def main():
       ]
       #print(' '.join(text_lines))
 
-      svg = generate_svg(src_size, inference_box, objs, labels, label_colors, text_lines, tracked_obj, face_obj, face_label, state, track_path_idx, name)
-
       if key == KeyCode.FACE:
           #print("Key: {}, Event {}".format(key, event))
           if state == WAIT_FOR_FACE_STATE:
               track_path_idx = 0
               if event == KeyEvent.PRESS:
-                  save_face_img(input_tensor, face_box, FACE_DIR_NAME, name, 0)
+                  tracked_obj = tracked_obj._replace(score = 0)
+                  save_face_img(input_tensor, face_box, FACE_DIR_NAME, name, track_path_idx)
                   state = FACE_TRACKING_STATE
           elif state == FACE_TRACKING_STATE:
               if event == KeyEvent.REPEAT:
+                  tracked_obj = tracked_obj._replace(score = 0)
                   save_face_img(input_tensor, face_box, FACE_DIR_NAME, name, track_path_idx + 1)
                   if track_path_idx < len(TRACK_PATH) - 2:
                       track_path_idx = track_path_idx + 1
                   else:
                       state = FACE_NAMING_STATE
-                      subprocess.run(["tar", "-C", FACE_DIR_NAME, "-czvf", "images.tgz", "./"])
-                      #tar = tarfile.open("images.tgz", "w:gz")
-                      #for subdir in os.scandir(FACE_DIR_NAME):
-                      #    print(subdir.path)
-                      #    tar.add(subdir.path)
-                      #tar.close()
-                      if args.output_url is not None:
-                          try:
-                              res = requests.post(url=args.output_url,
-                                                  data=open('images.tgz', 'rb'),
-                                                  headers={'Content-Type': 'application/x-gzip'})
-                              print(res)
-                          except:
-                              print("Couldn't send images.tgz to URL: {}".format(args.output_url))
 
               elif event == KeyEvent.RELEASE:
                   state = WAIT_FOR_FACE_STATE
-          elif state == FACE_NAMING_STATE:
+          elif state == NAME_DISPLAY_STATE or state == FACE_NAMING_STATE:
+              if state == FACE_NAMING_STATE:
+                  subprocess.run(["tar", "-C", FACE_DIR_NAME, "-czvf", "images.tgz", "./"])
+                  #tar = tarfile.open("images.tgz", "w:gz")
+                  #for subdir in os.scandir(FACE_DIR_NAME):
+                  #    print(subdir.path)
+                  #    tar.add(subdir.path)
+                  #tar.close()
+                  if args.output_url is not None:
+                      try:
+                          res = requests.post(url=args.output_url,
+                                              data=open('images.tgz', 'rb'),
+                                              headers={'Content-Type': 'application/x-gzip'})
+                          print(res)
+                      except:
+                          print("Couldn't send images.tgz to URL: {}".format(args.output_url))
+                  state = NAME_DISPLAY_STATE
               if event == KeyEvent.RELEASE:
                   state = WAIT_FOR_FACE_STATE
                   name = next(face_name_generator)
+
+      svg = generate_svg(src_size, inference_box, objs, labels, label_colors, text_lines, tracked_obj, face_obj, face_label, state, track_path_idx, name)
 
       face_coords = None
       return svg, face_coords
